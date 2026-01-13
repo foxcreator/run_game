@@ -5,6 +5,7 @@ import Minimap from '../ui/Minimap.js';
 import CaptureSystem from '../systems/CaptureSystem.js';
 import TilemapSystem from '../systems/TilemapSystem.js';
 import PathfindingSystem from '../systems/PathfindingSystem.js';
+import SpawnerSystem from '../systems/SpawnerSystem.js';
 import SoftCrowd from '../entities/SoftCrowd.js';
 import ChaserBlocker from '../entities/ChaserBlocker.js';
 import ChaserSticker from '../entities/ChaserSticker.js';
@@ -47,6 +48,9 @@ class GameScene extends Phaser.Scene {
         // Ініціалізуємо час останнього зіткнення з кіоском
         this.player.lastKioskCollisionTime = 0;
         
+        // Створюємо систему процедурного спавну (після створення гравця)
+        this.spawnerSystem = new SpawnerSystem(this, this.tilemap, this.player);
+        
         // Налаштовуємо камеру для слідкування за гравцем
         this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
         this.cameras.main.startFollow(this.player, true, 0.1, 0.1); // Плавне слідкування
@@ -78,8 +82,8 @@ class GameScene extends Phaser.Scene {
         // Масив перешкод
         this.obstacles = [];
         
-        // Створюємо перешкоди на карті
-        this.spawnObstacles();
+        // Створюємо початкові перешкоди (далі будуть спавнитися через SpawnerSystem)
+        this.spawnInitialObstacles();
         
         // Налаштовуємо колізії між гравцем та перешкодами
         this.setupObstacleCollisions();
@@ -92,44 +96,68 @@ class GameScene extends Phaser.Scene {
         this.score = 0;
     }
     
-    spawnObstacles() {
-        // Спавнимо черги людей на карті
-        const crowdCount = 8; // Кількість черг
+    spawnInitialObstacles() {
+        // Спавнимо початкові черги людей на карті (далі будуть спавнитися через SpawnerSystem)
+        const initialCount = 5; // Початкова кількість
         let spawned = 0;
         let attempts = 0;
-        const maxAttempts = 200;
+        const maxAttempts = 100;
         
-        while (spawned < crowdCount && attempts < maxAttempts) {
+        while (spawned < initialCount && attempts < maxAttempts) {
             attempts++;
             
-            // Генеруємо випадкову позицію
-            const x = Phaser.Math.Between(100, this.worldWidth - 100);
-            const y = Phaser.Math.Between(100, this.worldHeight - 100);
-            
-            // Перевіряємо чи позиція прохідна
-            if (!this.tilemap.isWalkable(x, y)) {
-                continue;
-            }
+            // Використовуємо SpawnerSystem для пошуку позиції
+            const pos = this.spawnerSystem.findSpawnPosition(20);
+            if (!pos) continue;
             
             // Перевіряємо чи немає перешкод поруч
-            let tooClose = false;
-            for (const obstacle of this.obstacles) {
-                const distance = Phaser.Math.Distance.Between(x, y, obstacle.x, obstacle.y);
-                if (distance < 150) {
-                    tooClose = true;
-                    break;
-                }
-            }
-            
-            if (tooClose) {
+            const minDistance = GAME_CONFIG.SPAWNER.MIN_DISTANCE_BETWEEN_OBJECTS;
+            if (!this.spawnerSystem.isPositionValid(pos.x, pos.y, minDistance, this.obstacles)) {
                 continue;
             }
             
             // Створюємо чергу людей
-            const crowd = new SoftCrowd(this, x, y);
+            const crowd = new SoftCrowd(this, pos.x, pos.y);
             this.obstacles.push(crowd);
             spawned++;
         }
+    }
+    
+    spawnObstacle() {
+        // Спавнимо одну перешкоду через SpawnerSystem
+        const pos = this.spawnerSystem.findSpawnPosition(30);
+        if (!pos) return null;
+        
+        // Перевіряємо чи немає перешкод поруч
+        const minDistance = GAME_CONFIG.SPAWNER.MIN_DISTANCE_BETWEEN_OBJECTS;
+        if (!this.spawnerSystem.isPositionValid(pos.x, pos.y, minDistance, this.obstacles)) {
+            return null;
+        }
+        
+        // Створюємо чергу людей
+        const crowd = new SoftCrowd(this, pos.x, pos.y);
+        this.obstacles.push(crowd);
+        return crowd;
+    }
+    
+    handleSpawnerLogic() {
+        // Перевіряємо та спавнимо об'єкти за потреби
+        if (!this.spawnerSystem || !this.player) return;
+        
+        // Перевіряємо перешкоди
+        const activeObstacles = this.obstacles.filter(o => o && o.active).length;
+        const targetObstacles = GAME_CONFIG.SPAWNER.TARGET_OBSTACLES;
+        
+        if (activeObstacles < targetObstacles) {
+            // Потрібно додати перешкоди
+            const toSpawn = targetObstacles - activeObstacles;
+            for (let i = 0; i < toSpawn; i++) {
+                this.spawnObstacle();
+            }
+        }
+        
+        // Перевіряємо ворогів (поки що не спавнимо додаткових, тільки початкові)
+        // Це буде реалізовано пізніше з урахуванням складності
     }
     
     setupObstacleCollisions() {
@@ -345,20 +373,46 @@ class GameScene extends Phaser.Scene {
         // Оновлення таймера виживання
         this.timeSurvived += delta / 1000; // в секундах
         
+        // Оновлення системи спавну
+        if (this.spawnerSystem) {
+            this.spawnerSystem.update(time, delta);
+            this.handleSpawnerLogic();
+        }
+        
         // Оновлення перешкод
-        for (const obstacle of this.obstacles) {
-            if (obstacle.active && obstacle.update) {
+        for (let i = this.obstacles.length - 1; i >= 0; i--) {
+            const obstacle = this.obstacles[i];
+            if (!obstacle || !obstacle.active) {
+                this.obstacles.splice(i, 1);
+                continue;
+            }
+            
+            // Cleanup перешкод позаду
+            if (this.spawnerSystem && this.spawnerSystem.shouldCleanup(obstacle)) {
+                obstacle.destroy();
+                this.obstacles.splice(i, 1);
+                continue;
+            }
+            
+            if (obstacle.update) {
                 obstacle.update(delta);
             }
         }
         
         // Оновлення ворогів
-        for (const chaser of this.chasers) {
-            if (chaser && chaser.active) {
-                chaser.update(delta);
-                // Перевіряємо колізії ворогів з тайлами карти
-                this.checkChaserTilemapCollisions(chaser);
+        for (let i = this.chasers.length - 1; i >= 0; i--) {
+            const chaser = this.chasers[i];
+            if (!chaser || !chaser.active) {
+                this.chasers.splice(i, 1);
+                continue;
             }
+            
+            // Cleanup ворогів позаду (але не видаляємо ворогів, вони завжди активні)
+            // Вороги будуть видалятися тільки при смерті або інших умовах
+            
+            chaser.update(delta);
+            // Перевіряємо колізії ворогів з тайлами карти
+            this.checkChaserTilemapCollisions(chaser);
         }
         
         // Оновлення HUD
