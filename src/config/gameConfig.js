@@ -11,17 +11,17 @@ export const GAME_CONFIG = {
     
     // Гравець
     PLAYER: {
-        BASE_SPEED: 220,
-        STAMINA_MAX: 100,
-        STAMINA_DRAIN_PER_SEC: 6,
-        STAMINA_REGEN_PER_SEC: 4,
-        STAMINA_REGEN_MULTIPLIER: 1.2,
-        EXHAUSTED_SLOW_DURATION: 2000,
-        EXHAUSTED_SPEED_MULTIPLIER: 0.75,
-        DASH_DURATION: 350,
-        DASH_SPEED_MULTIPLIER: 1.7,
-        DASH_COOLDOWN: 4000,
-        DASH_STAMINA_COST: 20
+        BASE_SPEED: 220,                    // Базова швидкість руху (пікселі/сек)
+        STAMINA_MAX: 100,                    // Максимальна стаміна (0-100)
+        STAMINA_DRAIN_PER_SEC: 6,            // Витрата стаміни при русі (одиниць/секунду)
+        STAMINA_REGEN_PER_SEC: 4,            // Відновлення стаміни при стоянні (одиниць/секунду)
+        STAMINA_REGEN_MULTIPLIER: 1.2,       // Множник швидкості відновлення при повній зупинці (x1.2)
+        EXHAUSTED_SLOW_DURATION: 2000,       // Тривалість повільного руху після виснаження (мс)
+        EXHAUSTED_SPEED_MULTIPLIER: 0.75,    // Множник швидкості в стані виснаження (75% від базової)
+        DASH_DURATION: 350,                  // Тривалість dash (мс)
+        DASH_SPEED_MULTIPLIER: 1.7,          // Множник швидкості під час dash (170% від базової)
+        DASH_COOLDOWN: 4000,                 // Cooldown dash (мс)
+        DASH_STAMINA_COST: 20                // Витрата стаміни за один dash (одиниць)
     },
     
     // Світ
@@ -29,5 +29,68 @@ export const GAME_CONFIG = {
         WIDTH: 4000,
         HEIGHT: 4000,
         TILE_SIZE: 32
+    },
+    
+    // Система захоплення (Capture)
+    CAPTURE: {
+        MAX: 100,                           // Максимальне значення capture (0-100)
+        CLOSE_DISTANCE: 70,                 // Відстань до ворога, при якій capture росте (пікселі)
+        VERY_CLOSE_DISTANCE: 35,            // Відстань до ворога, при якій capture росте дуже швидко (пікселі)
+        SAFE_DISTANCE: 120,                 // Відстань до ворога, при якій capture спадає (пікселі)
+        GROWTH_RATE_CLOSE: 5,              // Швидкість зростання capture коли ворог близько (одиниць/секунду)
+        GROWTH_RATE_VERY_CLOSE: 15,         // Швидкість зростання capture коли ворог дуже близько (одиниць/секунду)
+        DECAY_RATE: 25                      // Швидкість спаду capture коли ворог далеко (одиниць/секунду)
+    },
+    
+    // Перешкоди
+    OBSTACLES: {
+        SOFT_CROWD: {
+            WIDTH: 80,
+            HEIGHT: 40,
+            COLOR: 0xff6b6b, // Червоний колір для черги
+            SPEED_MULTIPLIER: 0.65, // Швидкість зменшується до 65%
+            DEBUFF_DURATION: 1000, // Тривалість дебафу (мс)
+            COOLDOWN: 500 // Затримка перед повторним застосуванням (мс)
+        }
+    },
+    
+    // Переслідувачі (вороги)
+    CHASERS: {
+        // Загальні параметри для всіх ворогів
+        COMMON: {
+            RADIUS: 12,                    // Радіус спрайта ворога (пікселі)
+            DRAG: 400,                     // Сила гальмування (для плавності руху)
+            DEPTH: 5,                      // Глибина відображення (вище тайлів, нижче гравця)
+            COLOR_BLOCKER: 0xe74c3c,       // Колір Blocker (червоний)
+            COLOR_STICKER: 0x9b59b6,       // Колір Sticker (фіолетовий)
+            COLLISION_RADIUS: 12           // Радіус для перевірки колізій з тайлами
+        },
+        
+        // Blocker - перекривач, обганяє і стає попереду
+        BLOCKER: {
+            SPEED: 150,                    // Базова швидкість руху (190-210 згідно MVP, пікселі/сек)
+            LEAD_DISTANCE: 150,            // Відстань для прогнозування позиції гравця (120-180 пікселів)
+            TOO_CLOSE_DISTANCE: 50,        // Мінімальна відстань до гравця, при якій відходимо убік (пікселі)
+            BACK_OFF_SPEED_MULTIPLIER: 0.7, // Множник швидкості при відході убік (70% від базової)
+            PLAYER_STANDING_THRESHOLD: 10  // Швидкість гравця, нижче якої вважається що він стоїть (пікселі/сек)
+        },
+        
+        // Sticker - прилипала, наздоганяє і робить удар
+        STICKER: {
+            SPEED: 180,                    // Базова швидкість руху (230-255 згідно MVP, пікселі/сек)
+            HIT_COOLDOWN: 1500,            // Cooldown після удару по гравцю (1.5 секунди, мс)
+            HIT_BACKOFF_DISTANCE: 30,      // Відстань відскоку назад після удару (пікселі)
+            CAPTURE_DAMAGE: 25,            // Capture що додається при ударі по гравцю (0-100)
+            RETREAT_SPEED_MULTIPLIER: 0.5  // Множник швидкості при відході під час cooldown (50% від базової)
+        },
+        
+        // Параметри спавну ворогів
+        SPAWN: {
+            INITIAL_COUNT: 6,              // Початкова кількість ворогів (1 Blocker + 1 Sticker)
+            MIN_DISTANCE_FROM_PLAYER: 300, // Мінімальна відстань від гравця при спавні (пікселі)
+            MAX_DISTANCE_FROM_PLAYER: 500, // Максимальна відстань від гравця при спавні (пікселі)
+            MIN_DISTANCE_BETWEEN: 150,     // Мінімальна відстань між ворогами при спавні (пікселі)
+            MAX_SPAWN_ATTEMPTS: 50         // Максимальна кількість спроб знайти валідну позицію для спавну
+        }
     }
 };

@@ -4,6 +4,10 @@ import HUD from '../ui/HUD.js';
 import Minimap from '../ui/Minimap.js';
 import CaptureSystem from '../systems/CaptureSystem.js';
 import TilemapSystem from '../systems/TilemapSystem.js';
+import PathfindingSystem from '../systems/PathfindingSystem.js';
+import SoftCrowd from '../entities/SoftCrowd.js';
+import ChaserBlocker from '../entities/ChaserBlocker.js';
+import ChaserSticker from '../entities/ChaserSticker.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
 
 class GameScene extends Phaser.Scene {
@@ -32,6 +36,9 @@ class GameScene extends Phaser.Scene {
                 .setOrigin(0.5);
             return;
         }
+        
+        // Створюємо систему обходу перешкод (pathfinding)
+        this.pathfindingSystem = new PathfindingSystem(this.tilemap);
 
         // Знаходимо прохідний тайл для старту гравця (біля центру)
         const startPos = this.findWalkablePosition(this.worldWidth / 2, this.worldHeight / 2);
@@ -62,12 +69,227 @@ class GameScene extends Phaser.Scene {
             this.minimap = null;
         }
         
-        // Масив переслідувачів (поки що порожній, будуть додані в задачі 5)
+        // Масив переслідувачів (ворогів)
         this.chasers = [];
+        
+        // Створюємо початкових ворогів
+        this.spawnInitialChasers();
+        
+        // Масив перешкод
+        this.obstacles = [];
+        
+        // Створюємо перешкоди на карті
+        this.spawnObstacles();
+        
+        // Налаштовуємо колізії між гравцем та перешкодами
+        this.setupObstacleCollisions();
+        
+        // Налаштовуємо колізії між гравцем та ворогами
+        this.setupChaserCollisions();
         
         // Таймер виживання
         this.timeSurvived = 0;
         this.score = 0;
+    }
+    
+    spawnObstacles() {
+        // Спавнимо черги людей на карті
+        const crowdCount = 8; // Кількість черг
+        let spawned = 0;
+        let attempts = 0;
+        const maxAttempts = 200;
+        
+        while (spawned < crowdCount && attempts < maxAttempts) {
+            attempts++;
+            
+            // Генеруємо випадкову позицію
+            const x = Phaser.Math.Between(100, this.worldWidth - 100);
+            const y = Phaser.Math.Between(100, this.worldHeight - 100);
+            
+            // Перевіряємо чи позиція прохідна
+            if (!this.tilemap.isWalkable(x, y)) {
+                continue;
+            }
+            
+            // Перевіряємо чи немає перешкод поруч
+            let tooClose = false;
+            for (const obstacle of this.obstacles) {
+                const distance = Phaser.Math.Distance.Between(x, y, obstacle.x, obstacle.y);
+                if (distance < 150) {
+                    tooClose = true;
+                    break;
+                }
+            }
+            
+            if (tooClose) {
+                continue;
+            }
+            
+            // Створюємо чергу людей
+            const crowd = new SoftCrowd(this, x, y);
+            this.obstacles.push(crowd);
+            spawned++;
+        }
+    }
+    
+    setupObstacleCollisions() {
+        // Налаштовуємо колізії між гравцем та перешкодами
+        this.physics.add.overlap(
+            this.player,
+            this.obstacles,
+            this.handleObstacleCollision,
+            null,
+            this
+        );
+    }
+    
+    handleObstacleCollision(player, obstacle) {
+        if (!obstacle.active) return;
+        
+        // Викликаємо метод обробки колізії перешкоди
+        if (obstacle.onPlayerCollision) {
+            obstacle.onPlayerCollision(player);
+        }
+    }
+    
+    spawnInitialChasers() {
+        // Спочатку спавнимо початкових ворогів
+        const initialCount = GAME_CONFIG.CHASERS.SPAWN.INITIAL_COUNT;
+        
+        // Розподіляємо ворогів між типами (50% Blocker, 50% Sticker)
+        const blockerCount = Math.floor(initialCount / 2);
+        const stickerCount = initialCount - blockerCount;
+        
+        // Створюємо Blockers
+        for (let i = 0; i < blockerCount; i++) {
+            const chaser = this.spawnChaser('Blocker');
+            if (!chaser) {
+                console.warn(`Не вдалося заспавнити Blocker ${i + 1}`);
+            }
+        }
+        
+        // Створюємо Stickers
+        for (let i = 0; i < stickerCount; i++) {
+            const chaser = this.spawnChaser('Sticker');
+            if (!chaser) {
+                console.warn(`Не вдалося заспавнити Sticker ${i + 1}`);
+            }
+        }
+    }
+    
+    spawnChaser(type) {
+        // Знаходимо позицію для спавну (подалі від гравця)
+        const spawnConfig = GAME_CONFIG.CHASERS.SPAWN;
+        let attempts = 0;
+        const maxAttempts = spawnConfig.MAX_SPAWN_ATTEMPTS;
+        let spawnX, spawnY;
+        
+        while (attempts < maxAttempts) {
+            attempts++;
+            
+            // Генеруємо позицію на відстані від гравця
+            const angle = Math.random() * Math.PI * 2;
+            const distance = Phaser.Math.Between(
+                spawnConfig.MIN_DISTANCE_FROM_PLAYER,
+                spawnConfig.MAX_DISTANCE_FROM_PLAYER
+            );
+            spawnX = this.player.x + Math.cos(angle) * distance;
+            spawnY = this.player.y + Math.sin(angle) * distance;
+            
+            // Перевіряємо межі світу
+            if (spawnX < 50 || spawnX > this.worldWidth - 50 ||
+                spawnY < 50 || spawnY > this.worldHeight - 50) {
+                continue;
+            }
+            
+            // Перевіряємо чи позиція прохідна
+            if (!this.tilemap.isWalkable(spawnX, spawnY)) {
+                continue;
+            }
+            
+            // Перевіряємо чи немає інших ворогів поруч
+            let tooClose = false;
+            for (const chaser of this.chasers) {
+                if (chaser && chaser.active) {
+                    const dist = Phaser.Math.Distance.Between(spawnX, spawnY, chaser.x, chaser.y);
+                    if (dist < spawnConfig.MIN_DISTANCE_BETWEEN) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (tooClose) {
+                continue;
+            }
+            
+            // Знайшли валідну позицію
+            break;
+        }
+        
+        if (attempts >= maxAttempts) {
+            // Не знайшли позицію - використовуємо позицію гравця + відстань
+            const angle = Math.random() * Math.PI * 2;
+            const distance = (spawnConfig.MIN_DISTANCE_FROM_PLAYER + spawnConfig.MAX_DISTANCE_FROM_PLAYER) / 2;
+            spawnX = this.player.x + Math.cos(angle) * distance;
+            spawnY = this.player.y + Math.sin(angle) * distance;
+            
+            // Перевіряємо межі світу для fallback позиції
+            spawnX = Phaser.Math.Clamp(spawnX, 50, this.worldWidth - 50);
+            spawnY = Phaser.Math.Clamp(spawnY, 50, this.worldHeight - 50);
+            
+            // Якщо fallback позиція теж не прохідна, шукаємо найближчу прохідну
+            if (!this.tilemap.isWalkable(spawnX, spawnY)) {
+                const fallbackPos = this.findWalkablePosition(spawnX, spawnY);
+                spawnX = fallbackPos.x;
+                spawnY = fallbackPos.y;
+            }
+        }
+        
+        // Перевіряємо чи позиція все ще валідна перед створенням
+        if (!this.tilemap.isWalkable(spawnX, spawnY)) {
+            console.warn(`Не вдалося знайти валідну позицію для ${type} на (${spawnX}, ${spawnY})`);
+            return null;
+        }
+        
+        // Створюємо ворога
+        let chaser;
+        if (type === 'Blocker') {
+            chaser = new ChaserBlocker(this, spawnX, spawnY);
+        } else if (type === 'Sticker') {
+            chaser = new ChaserSticker(this, spawnX, spawnY);
+            chaser.setCaptureSystem(this.captureSystem);
+        } else {
+            return null;
+        }
+        
+        chaser.setTarget(this.player);
+        chaser.setPathfindingSystem(this.pathfindingSystem);
+        this.chasers.push(chaser);
+        
+        return chaser;
+    }
+    
+    setupChaserCollisions() {
+        // Налаштовуємо колізії між гравцем та ворогами
+        this.physics.add.overlap(
+            this.player,
+            this.chasers,
+            this.handleChaserCollision,
+            null,
+            this
+        );
+    }
+    
+    handleChaserCollision(player, chaser) {
+        if (!chaser.active) return;
+        
+        // Обробка колізії з Sticker (удар)
+        if (chaser.type === 'Sticker' && chaser.onHitPlayer) {
+            chaser.onHitPlayer();
+        }
+        
+        // Blocker просто блокує шлях (фізична колізія)
     }
     
     findWalkablePosition(centerX, centerY) {
@@ -123,6 +345,22 @@ class GameScene extends Phaser.Scene {
         // Оновлення таймера виживання
         this.timeSurvived += delta / 1000; // в секундах
         
+        // Оновлення перешкод
+        for (const obstacle of this.obstacles) {
+            if (obstacle.active && obstacle.update) {
+                obstacle.update(delta);
+            }
+        }
+        
+        // Оновлення ворогів
+        for (const chaser of this.chasers) {
+            if (chaser && chaser.active) {
+                chaser.update(delta);
+                // Перевіряємо колізії ворогів з тайлами карти
+                this.checkChaserTilemapCollisions(chaser);
+            }
+        }
+        
         // Оновлення HUD
         if (this.hud) {
             this.hud.update();
@@ -141,6 +379,53 @@ class GameScene extends Phaser.Scene {
         // Оновлення міні-карти
         if (this.minimap) {
             this.minimap.update();
+        }
+    }
+    
+    checkChaserTilemapCollisions(chaser) {
+        if (!this.tilemap || !chaser) return;
+        
+        const chaserX = chaser.x;
+        const chaserY = chaser.y;
+        const chaserRadius = GAME_CONFIG.CHASERS.COMMON.COLLISION_RADIUS;
+        
+        // Перевіряємо колізії ворога з тайлами
+        const checkPoints = [
+            { x: chaserX, y: chaserY },
+            { x: chaserX + chaserRadius, y: chaserY },
+            { x: chaserX - chaserRadius, y: chaserY },
+            { x: chaserX, y: chaserY + chaserRadius },
+            { x: chaserX, y: chaserY - chaserRadius },
+        ];
+        
+        let hasCollision = false;
+        for (const point of checkPoints) {
+            if (this.tilemap.hasCollision(point.x, point.y)) {
+                hasCollision = true;
+                break;
+            }
+        }
+        
+        if (hasCollision) {
+            // Блокуємо рух ворога в напрямку колізії
+            const currentVelocityX = chaser.body.velocity.x;
+            const currentVelocityY = chaser.body.velocity.y;
+            
+            // Перевіряємо горизонтальний рух
+            if (currentVelocityX !== 0) {
+                const checkX = chaserX + (currentVelocityX > 0 ? chaserRadius : -chaserRadius);
+                if (this.tilemap.hasCollision(checkX, chaserY)) {
+                    chaser.body.setVelocityX(0);
+                }
+            }
+            
+            // Перевіряємо вертикальний рух
+            if (currentVelocityY !== 0) {
+                const checkY = chaserY + (currentVelocityY > 0 ? chaserRadius : -chaserRadius);
+                if (this.tilemap.hasCollision(chaserX, checkY)) {
+                    chaser.body.setVelocityY(0);
+                }
+            }
         }
     }
     

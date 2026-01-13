@@ -1,18 +1,20 @@
 // CaptureSystem - система захоплення (0-100)
+import { GAME_CONFIG } from '../config/gameConfig.js';
+
 class CaptureSystem {
     constructor(scene) {
         this.scene = scene;
         this.capture = 0; // 0-100
-        this.maxCapture = 100;
+        this.maxCapture = GAME_CONFIG.CAPTURE.MAX;
         
-        // Параметри зростання/спаду (згідно MVP)
-        this.closeDistance = 60; // < 60px - швидке зростання
-        this.veryCloseDistance = 35; // < 35px - дуже швидке зростання
-        this.safeDistance = 120; // > 120px - спадає
+        // Параметри зростання/спаду (з конфігу)
+        this.closeDistance = GAME_CONFIG.CAPTURE.CLOSE_DISTANCE;
+        this.veryCloseDistance = GAME_CONFIG.CAPTURE.VERY_CLOSE_DISTANCE;
+        this.safeDistance = GAME_CONFIG.CAPTURE.SAFE_DISTANCE;
         
-        this.growthRateClose = 18; // per second
-        this.growthRateVeryClose = 35; // per second
-        this.decayRate = 22; // per second
+        this.growthRateClose = GAME_CONFIG.CAPTURE.GROWTH_RATE_CLOSE;
+        this.growthRateVeryClose = GAME_CONFIG.CAPTURE.GROWTH_RATE_VERY_CLOSE;
+        this.decayRate = GAME_CONFIG.CAPTURE.DECAY_RATE;
     }
     
     update(delta, player, chasers = []) {

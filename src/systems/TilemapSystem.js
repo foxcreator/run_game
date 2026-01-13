@@ -323,17 +323,19 @@ class TilemapSystem {
         // Створюємо спрайти для кіосків
         for (const kiosk of this.activeKiosks) {
             // Створюємо спрайт кіоска
+            const kioskColor = this.TILE_COLORS[this.TILE_TYPES.KIOSK]; // 0x0000ff - синій
             const sprite = this.scene.add.rectangle(
                 kiosk.worldX,
                 kiosk.worldY,
                 this.tileSize,
                 this.tileSize,
-                this.TILE_COLORS[this.TILE_TYPES.KIOSK],
+                kioskColor,
                 1.0
             );
             sprite.setScrollFactor(1);
             sprite.setOrigin(0.5);
-            sprite.setDepth(-1); // Кіоски під HUD (HUD має depth 200+)
+            sprite.setDepth(1); // Кіоски поверх тайлів карти (depth 0), але під гравцем (depth 10) та HUD (depth 200+)
+            sprite.setVisible(true);
             kiosk.sprite = sprite;
             this.kioskSprites.push(sprite);
         }
@@ -458,22 +460,32 @@ class TilemapSystem {
             worldY: worldPos.y
         };
         
-        // Створюємо спрайт
+        // Створюємо спрайт кіоска
+        const kioskColor = this.TILE_COLORS[this.TILE_TYPES.KIOSK]; // 0x0000ff - синій
         const sprite = this.scene.add.rectangle(
             kiosk.worldX,
             kiosk.worldY,
             this.tileSize,
             this.tileSize,
-            this.TILE_COLORS[this.TILE_TYPES.KIOSK],
+            kioskColor,
             1.0
         );
         sprite.setScrollFactor(1);
         sprite.setOrigin(0.5);
-        sprite.setDepth(-1); // Кіоски під HUD (HUD має depth 200+)
+        sprite.setDepth(1); // Кіоски поверх тайлів карти (depth 0), але під гравцем (depth 10) та HUD (depth 200+)
+        sprite.setVisible(true); // Переконаємося, що спрайт видимий
+        
         kiosk.sprite = sprite;
         
         this.activeKiosks.push(kiosk);
-        this.kioskSprites.push(sprite);
+        if (this.kioskSprites) {
+            this.kioskSprites.push(sprite);
+        }
+        
+        // Оновлюємо міні-карту якщо вона існує
+        if (this.scene.minimap) {
+            this.scene.minimap.refresh();
+        }
         
         return kiosk;
     }

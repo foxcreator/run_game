@@ -58,6 +58,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.frozenPosition = null; // Позиція при заморозці
         this.lastKioskCollisionTime = 0; // Час останнього зіткнення з кіоском
         this.kioskCooldown = GAME_CONFIG.KIOSKS.COOLDOWN;
+        
+        // Дебафи швидкості (для перешкод)
+        this.speedDebuffs = []; // Масив активних дебафів { multiplier, duration }
     }
     
     createVisuals(scene) {
@@ -125,9 +128,49 @@ class Player extends Phaser.Physics.Arcade.Sprite {
                 // Це буде зроблено в GameScene.checkTilemapCollisions()
             }
         }
+        
+        // Оновлення дебафів швидкості
+        this.updateSpeedDebuffs(delta);
+    }
+    
+    updateSpeedDebuffs(delta) {
+        // Оновлюємо всі активні дебафи
+        for (let i = this.speedDebuffs.length - 1; i >= 0; i--) {
+            const debuff = this.speedDebuffs[i];
+            debuff.duration -= delta;
+            
+            if (debuff.duration <= 0) {
+                // Дебаф закінчився - видаляємо
+                this.speedDebuffs.splice(i, 1);
+            }
+        }
+        
+        // Обчислюємо загальний множник швидкості
+        // Exhausted має пріоритет над дебафами
+        if (this.exhausted) {
+            // Exhausted встановлює свій множник, не змінюємо його
+            return;
+        }
+        
+        // Якщо є дебафи, застосовуємо найнижчий множник
+        if (this.speedDebuffs.length > 0) {
+            let minMultiplier = 1.0;
+            for (const debuff of this.speedDebuffs) {
+                minMultiplier = Math.min(minMultiplier, debuff.multiplier);
+            }
+            this.speedMultiplier = minMultiplier;
+        } else {
+            // Якщо немає дебафів - повертаємо до 1.0
+            this.speedMultiplier = 1.0;
+        }
     }
     
     updateStamina(delta) {
+        // Якщо гравець заморожений - не оновлюємо стаміну (вона вже відновлена з кіоска)
+        if (this.isFrozen) {
+            return;
+        }
+        
         const dt = delta / 1000; // Перетворюємо в секунди
         
         if (this.isMoving && !this.exhausted) {
@@ -308,7 +351,23 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     
     restoreStamina() {
         // Поповнюємо стаміну до максимуму (енергетик з кіоска)
+        // Встановлюємо точно на максимум, незалежно від поточного значення
         this.stamina = this.staminaMax;
+        
+        // Також скидаємо exhausted стан, якщо він був активний
+        if (this.exhausted) {
+            this.exhausted = false;
+            this.exhaustedTimer = 0;
+            this.speedMultiplier = 1.0;
+        }
+    }
+    
+    applySpeedDebuff(multiplier, duration) {
+        // Додаємо новий дебаф швидкості
+        this.speedDebuffs.push({
+            multiplier: multiplier,
+            duration: duration
+        });
     }
     
     destroy() {
