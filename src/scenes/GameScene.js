@@ -110,8 +110,18 @@ class GameScene extends Phaser.Scene {
         while (spawned < initialCount && attempts < maxAttempts) {
             attempts++;
             
-            // Використовуємо SpawnerSystem для пошуку позиції
-            const pos = this.spawnerSystem.findSpawnPosition(20);
+            // Використовуємо SpawnerSystem для пошуку позиції (якщо увімкнено)
+            let pos;
+            if (this.spawnerSystem) {
+                pos = this.spawnerSystem.findSpawnPosition(20);
+            } else {
+                // Якщо SpawnerSystem вимкнено, генеруємо випадкову позицію
+                const x = Phaser.Math.Between(100, this.worldWidth - 100);
+                const y = Phaser.Math.Between(100, this.worldHeight - 100);
+                if (!this.tilemap.isWalkable(x, y)) continue;
+                pos = { x, y };
+            }
+            
             if (!pos) continue;
             
             // Перевіряємо чи немає перешкод поруч
@@ -139,7 +149,9 @@ class GameScene extends Phaser.Scene {
     }
     
     spawnObstacle() {
-        // Спавнимо одну перешкоду через SpawnerSystem
+        // Спавнимо одну перешкоду через SpawnerSystem (якщо увімкнено)
+        if (!this.spawnerSystem) return null;
+        
         const pos = this.spawnerSystem.findSpawnPosition(30);
         if (!pos) return null;
         
