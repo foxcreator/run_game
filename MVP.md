@@ -380,7 +380,7 @@ Acceptance:
 
 Ось прям ідеальний порядок комітів/кроків:
 	1.	Skeleton + сцени (Menu/Game/Result/Shop)
-	2.	Player movement + stamina + dash + HUD stamina
+	2.	✅ Player movement + stamina + dash + HUD stamina
 	3.	Capture bar + програш через 100
 	4.	Obstacle 1–2 (кіоск + черга) + колізії
 	5.	2 вороги (Sticker + Blocker) з базовим AI
