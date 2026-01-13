@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8080:80"
+    # Volume для розробки (зміни відображаються одразу)
+    # Якщо потрібен read-only режим, змініть на :ro
+    volumes:
+      - .:/usr/share/nginx/html
+    container_name: busification-run
+    restart: unless-stopped
