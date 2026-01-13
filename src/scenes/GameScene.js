@@ -49,7 +49,11 @@ class GameScene extends Phaser.Scene {
         this.player.lastKioskCollisionTime = 0;
         
         // Створюємо систему процедурного спавну (після створення гравця)
-        this.spawnerSystem = new SpawnerSystem(this, this.tilemap, this.player);
+        if (GAME_CONFIG.SPAWNER.ENABLED) {
+            this.spawnerSystem = new SpawnerSystem(this, this.tilemap, this.player);
+        } else {
+            this.spawnerSystem = null;
+        }
         
         // Налаштовуємо камеру для слідкування за гравцем
         this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
@@ -112,8 +116,19 @@ class GameScene extends Phaser.Scene {
             
             // Перевіряємо чи немає перешкод поруч
             const minDistance = GAME_CONFIG.SPAWNER.MIN_DISTANCE_BETWEEN_OBJECTS;
-            if (!this.spawnerSystem.isPositionValid(pos.x, pos.y, minDistance, this.obstacles)) {
+            if (this.spawnerSystem && !this.spawnerSystem.isPositionValid(pos.x, pos.y, minDistance, this.obstacles)) {
                 continue;
+            } else if (!this.spawnerSystem) {
+                // Якщо SpawnerSystem вимкнено, перевіряємо вручну
+                let tooClose = false;
+                for (const obstacle of this.obstacles) {
+                    const distance = Phaser.Math.Distance.Between(pos.x, pos.y, obstacle.x, obstacle.y);
+                    if (distance < minDistance) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+                if (tooClose) continue;
             }
             
             // Створюємо чергу людей
