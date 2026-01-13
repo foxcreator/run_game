@@ -493,7 +493,7 @@ Acceptance:
 	2.	✅ Player movement + stamina + dash + HUD stamina
 	3.	✅ Capture bar + програш через 100 + Карта світу — tilemap 4000×4000 з колізіями (MVP)
 	4.	Obstacle 1–2 (кіоск + черга) + колізії
-	5.	2 вороги (Sticker + Blocker) з базовим AI
+	5.	2 типи ворогів (Sticker + Blocker) з базовим AI
 	6.	Spawner ring + safe radius + cleanup
 	7.	Всі 6 перешкод
 	8.	Гроші + 4 бонуси + таймери ефектів
