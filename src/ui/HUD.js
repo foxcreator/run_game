@@ -10,6 +10,9 @@ class HUD {
         this.staminaText = null;
         this.dashCooldownBar = null;
         this.dashCooldownBg = null;
+        this.captureBar = null;
+        this.captureBarBg = null;
+        this.captureText = null;
     }
     
     create(player) {
@@ -27,12 +30,14 @@ class HUD {
         this.staminaBarBg = this.scene.add.rectangle(barX, barY, barWidth, barHeight, 0x2c3e50, 0.8)
             .setOrigin(0, 0.5)
             .setStrokeStyle(2, 0xffffff, 0.5)
-            .setScrollFactor(0); // Не слідує за камерою
+            .setScrollFactor(0) // Не слідує за камерою
+            .setDepth(200); // HUD поверх всього
         
         // Бар стаміни
         this.staminaBar = this.scene.add.rectangle(barX, barY, barWidth, barHeight, 0x3498db, 1)
             .setOrigin(0, 0.5)
-            .setScrollFactor(0);
+            .setScrollFactor(0)
+            .setDepth(201);
         
         // Текст стаміни
         this.staminaText = this.scene.add.text(barX + barWidth + 20, barY, '100/100', {
@@ -42,7 +47,8 @@ class HUD {
             stroke: '#000000',
             strokeThickness: 2
         }).setOrigin(0, 0.5)
-        .setScrollFactor(0);
+        .setScrollFactor(0)
+        .setDepth(202);
         
         // Dash cooldown бар
         const dashBarY = barY + 40;
@@ -53,12 +59,14 @@ class HUD {
         this.dashCooldownBg = this.scene.add.rectangle(barX, dashBarY, dashBarWidth, dashBarHeight, 0x2c3e50, 0.8)
             .setOrigin(0, 0.5)
             .setStrokeStyle(2, 0xffffff, 0.5)
-            .setScrollFactor(0);
+            .setScrollFactor(0)
+            .setDepth(200);
         
         // Dash cooldown бар
         this.dashCooldownBar = this.scene.add.rectangle(barX, dashBarY, dashBarWidth, dashBarHeight, 0xf39c12, 1)
             .setOrigin(0, 0.5)
-            .setScrollFactor(0);
+            .setScrollFactor(0)
+            .setDepth(201);
         
         // Текст dash
         this.dashText = this.scene.add.text(barX, dashBarY - 25, 'DASH', {
@@ -68,7 +76,41 @@ class HUD {
             stroke: '#000000',
             strokeThickness: 1
         }).setOrigin(0, 0.5)
-        .setScrollFactor(0);
+        .setScrollFactor(0)
+        .setDepth(202);
+        
+        // Capture bar
+        const captureBarY = dashBarY + 40;
+        const captureBarWidth = 300;
+        const captureBarHeight = 25;
+        
+        // Фон capture bar
+        this.captureBarBg = this.scene.add.rectangle(barX, captureBarY, captureBarWidth, captureBarHeight, 0x2c3e50, 0.8)
+            .setOrigin(0, 0.5)
+            .setStrokeStyle(2, 0xffffff, 0.5)
+            .setScrollFactor(0)
+            .setDepth(200);
+        
+        // Capture bar
+        this.captureBar = this.scene.add.rectangle(barX, captureBarY, captureBarWidth, captureBarHeight, 0xe74c3c, 1)
+            .setOrigin(0, 0.5)
+            .setScrollFactor(0)
+            .setDepth(201);
+        
+        // Текст capture
+        this.captureText = this.scene.add.text(barX + captureBarWidth + 20, captureBarY, 'CAPTURE 0/100', {
+            fontSize: '18px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0, 0.5)
+        .setScrollFactor(0)
+        .setDepth(202);
+    }
+    
+    setCaptureSystem(captureSystem) {
+        this.captureSystem = captureSystem;
     }
     
     update() {
@@ -108,6 +150,29 @@ class HUD {
         } else {
             this.dashCooldownBar.setFillStyle(0x95a5a6); // Сірий - на cooldown
         }
+        
+        // Оновлення capture bar
+        if (this.captureSystem) {
+            const capture = this.captureSystem.getCapture();
+            const captureMax = this.captureSystem.getMaxCapture();
+            const capturePercent = this.captureSystem.getCapturePercent();
+            
+            // Ширина бару
+            const captureBarWidth = 300;
+            this.captureBar.width = captureBarWidth * capturePercent;
+            
+            // Колір бару залежить від capture
+            if (capturePercent < 0.3) {
+                this.captureBar.setFillStyle(0x2ecc71); // Зелений - безпечно
+            } else if (capturePercent < 0.6) {
+                this.captureBar.setFillStyle(0xf39c12); // Помаранчевий - увага
+            } else {
+                this.captureBar.setFillStyle(0xe74c3c); // Червоний - небезпечно
+            }
+            
+            // Текст capture
+            this.captureText.setText(`CAPTURE ${Math.floor(capture)}/${captureMax}`);
+        }
     }
     
     destroy() {
@@ -117,6 +182,9 @@ class HUD {
         if (this.dashCooldownBar) this.dashCooldownBar.destroy();
         if (this.dashCooldownBg) this.dashCooldownBg.destroy();
         if (this.dashText) this.dashText.destroy();
+        if (this.captureBar) this.captureBar.destroy();
+        if (this.captureBarBg) this.captureBarBg.destroy();
+        if (this.captureText) this.captureText.destroy();
     }
 }
 
