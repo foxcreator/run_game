@@ -1,4 +1,6 @@
 // Player entity - гравець з рухом, стаміною та dash
+import { GAME_CONFIG } from '../config/gameConfig.js';
+
 class Player extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y) {
         super(scene, x, y, null);
@@ -11,28 +13,28 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.setDrag(600); // Плавне гальмування
         
         // Параметри руху (згідно MVP)
-        this.baseSpeed = 220;
+        this.baseSpeed = GAME_CONFIG.PLAYER.BASE_SPEED;
         this.currentSpeed = this.baseSpeed;
         this.speedMultiplier = 1.0;
         
         // Стаміна (згідно MVP)
-        this.staminaMax = 100;
+        this.staminaMax = GAME_CONFIG.PLAYER.STAMINA_MAX;
         this.stamina = this.staminaMax;
-        this.staminaDrainPerSec = 6;
-        this.staminaRegenPerSec = 4;
-        this.staminaRegenMultiplier = 1.2; // Швидше реген при стоянні
+        this.staminaDrainPerSec = GAME_CONFIG.PLAYER.STAMINA_DRAIN_PER_SEC;
+        this.staminaRegenPerSec = GAME_CONFIG.PLAYER.STAMINA_REGEN_PER_SEC;
+        this.staminaRegenMultiplier = GAME_CONFIG.PLAYER.STAMINA_REGEN_MULTIPLIER;
         
         // Exhausted стан
         this.exhausted = false;
-        this.exhaustedSlowDuration = 2000; // 2 сек
-        this.exhaustedSpeedMultiplier = 0.75;
+        this.exhaustedSlowDuration = GAME_CONFIG.PLAYER.EXHAUSTED_SLOW_DURATION;
+        this.exhaustedSpeedMultiplier = GAME_CONFIG.PLAYER.EXHAUSTED_SPEED_MULTIPLIER;
         this.exhaustedTimer = 0;
         
         // Dash (згідно MVP)
-        this.dashDuration = 350; // 0.35 сек
-        this.dashSpeedMultiplier = 1.7;
-        this.dashCooldown = 4000; // 4 сек
-        this.dashStaminaCost = 20;
+        this.dashDuration = GAME_CONFIG.PLAYER.DASH_DURATION;
+        this.dashSpeedMultiplier = GAME_CONFIG.PLAYER.DASH_SPEED_MULTIPLIER;
+        this.dashCooldown = GAME_CONFIG.PLAYER.DASH_COOLDOWN;
+        this.dashStaminaCost = GAME_CONFIG.PLAYER.DASH_STAMINA_COST;
         this.dashActive = false;
         this.dashTimer = 0;
         this.dashCooldownTimer = 0;
@@ -48,6 +50,14 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         
         // Флаг для відстеження руху
         this.isMoving = false;
+        
+        // Стан заморозки (при зіткненні з кіоском)
+        this.isFrozen = false;
+        this.frozenTimer = 0;
+        this.frozenDuration = GAME_CONFIG.KIOSKS.FREEZE_DURATION;
+        this.frozenPosition = null; // Позиція при заморозці
+        this.lastKioskCollisionTime = 0; // Час останнього зіткнення з кіоском
+        this.kioskCooldown = GAME_CONFIG.KIOSKS.COOLDOWN;
     }
     
     createVisuals(scene) {
@@ -64,6 +74,7 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         // Встановлюємо текстуру
         this.setTexture('player');
         this.setDisplaySize(radius * 2, radius * 2);
+        this.setDepth(10); // Гравець завжди поверх тайлів карти
     }
     
     update(time, delta) {
@@ -103,6 +114,17 @@ class Player extends Phaser.Physics.Arcade.Sprite {
                 this.stamina = 15; // Відновлюємо трохи стаміни
             }
         }
+        
+        // Frozen стан (при зіткненні з кіоском)
+        if (this.isFrozen) {
+            this.frozenTimer -= delta;
+            if (this.frozenTimer <= 0) {
+                this.isFrozen = false;
+                this.frozenPosition = null; // Очищаємо позицію
+                // Після заморозки потрібно відштовхнути гравця від кіоска
+                // Це буде зроблено в GameScene.checkTilemapCollisions()
+            }
+        }
     }
     
     updateStamina(delta) {
@@ -140,6 +162,13 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     }
     
     handleMovement(delta) {
+        // Якщо гравець заморожений, блокуємо рух
+        if (this.isFrozen) {
+            this.setVelocity(0, 0);
+            this.isMoving = false;
+            return;
+        }
+        
         // Визначаємо напрямок руху
         let moveX = 0;
         let moveY = 0;
@@ -195,6 +224,20 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         }
     }
     
+    freeze(duration = 2000) {
+        // Заморожуємо гравця на вказаний час
+        if (this.isFrozen) return; // Вже заморожений
+        
+        this.isFrozen = true;
+        this.frozenTimer = duration;
+        this.frozenPosition = { x: this.x, y: this.y }; // Зберігаємо позицію
+        this.setVelocity(0, 0); // Зупиняємо рух
+    }
+    
+    getFrozenPosition() {
+        return this.frozenPosition;
+    }
+    
     canDash() {
         return !this.dashActive && 
                this.dashCooldownTimer <= 0 && 
@@ -227,7 +270,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         // Оновлюємо колір спрайта залежно від стану
         let tint = 0x3498db; // Синій за замовчуванням
         
-        if (this.exhausted) {
+        if (this.isFrozen) {
+            tint = 0x9b59b6; // Фіолетовий коли заморожений
+        } else if (this.exhausted) {
             tint = 0xe74c3c; // Червоний коли exhausted
         } else if (this.dashActive) {
             tint = 0xf39c12; // Помаранчевий під час dash
@@ -259,6 +304,11 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     
     isExhausted() {
         return this.exhausted;
+    }
+    
+    restoreStamina() {
+        // Поповнюємо стаміну до максимуму (енергетик з кіоска)
+        this.stamina = this.staminaMax;
     }
     
     destroy() {
