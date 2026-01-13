@@ -358,6 +358,7 @@ class GameScene extends Phaser.Scene {
                 chaser.update(delta);
                 // Перевіряємо колізії ворогів з тайлами карти
                 this.checkChaserTilemapCollisions(chaser);
+                this.checkChaserChaserCollisions(chaser);
             }
         }
         
@@ -424,6 +425,38 @@ class GameScene extends Phaser.Scene {
                 const checkY = chaserY + (currentVelocityY > 0 ? chaserRadius : -chaserRadius);
                 if (this.tilemap.hasCollision(chaserX, checkY)) {
                     chaser.body.setVelocityY(0);
+                }
+            }
+        }
+    }
+    
+    checkChaserChaserCollisions(chaser) {
+        if (!chaser || !chaser.active) return;
+        const minDistance = GAME_CONFIG.CHASERS.COMMON.MIN_DISTANCE_BETWEEN;
+        const chaserRadius = GAME_CONFIG.CHASERS.COMMON.COLLISION_RADIUS;
+        const chaserX = chaser.x;
+        const chaserY = chaser.y;
+        const currentVelX = chaser.body.velocity.x;
+        const currentVelY = chaser.body.velocity.y;
+        for (const other of this.chasers) {
+            if (!other || !other.active || other === chaser) continue;
+            const dx = chaserX - other.x;
+            const dy = chaserY - other.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance > 0 && distance < minDistance) {
+                if (currentVelX !== 0) {
+                    const nextX = chaserX + (currentVelX > 0 ? chaserRadius : -chaserRadius);
+                    const distToOther = Math.sqrt((nextX - other.x) * (nextX - other.x) + (chaserY - other.y) * (chaserY - other.y));
+                    if (distToOther < minDistance) {
+                        chaser.body.setVelocityX(0);
+                    }
+                }
+                if (currentVelY !== 0) {
+                    const nextY = chaserY + (currentVelY > 0 ? chaserRadius : -chaserRadius);
+                    const distToOther = Math.sqrt((chaserX - other.x) * (chaserX - other.x) + (nextY - other.y) * (nextY - other.y));
+                    if (distToOther < minDistance) {
+                        chaser.body.setVelocityY(0);
+                    }
                 }
             }
         }
