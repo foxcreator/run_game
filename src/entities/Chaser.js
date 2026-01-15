@@ -1,5 +1,6 @@
 // Chaser - базовий клас для переслідувачів (ворогів)
 import { GAME_CONFIG } from '../config/gameConfig.js';
+import spriteManager from '../utils/SpriteManager.js';
 
 class Chaser extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y, type) {
@@ -22,6 +23,10 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         this.speed = 200;
         this.target = null; // Ціль (гравець)
         this.pathfindingSystem = null; // Система обходу перешкод
+        
+        // Стан заморозки (для колізій з авто)
+        this.isFrozen = false;
+        this.frozenTimer = 0;
     }
     
     setPathfindingSystem(pathfindingSystem) {
@@ -29,25 +34,15 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
     }
     
     createVisuals(scene) {
-        // Створюємо простий спрайт для ворога
-        const radius = GAME_CONFIG.CHASERS.COMMON.RADIUS;
-        const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
+        // Створюємо спрайт ворога через SpriteManager
+        const textureKey = spriteManager.createChaserSprite(scene, this.type);
+        this.setTexture(textureKey);
         
-        // Різні кольори для різних типів
-        const color = this.type === 'Blocker' 
-            ? GAME_CONFIG.CHASERS.COMMON.COLOR_BLOCKER 
-            : GAME_CONFIG.CHASERS.COMMON.COLOR_STICKER;
-        
-        graphics.fillStyle(color, 1);
-        graphics.fillCircle(radius, radius, radius);
-        graphics.lineStyle(2, 0xffffff, 1);
-        graphics.strokeCircle(radius, radius, radius);
-        graphics.generateTexture(`chaser-${this.type}`, radius * 2, radius * 2);
-        graphics.destroy();
-        
-        // Встановлюємо текстуру
-        this.setTexture(`chaser-${this.type}`);
-        this.setDisplaySize(radius * 2, radius * 2);
+        const config = this.type === 'Blocker' 
+            ? spriteManager.CHASER_SPRITES.BLOCKER 
+            : spriteManager.CHASER_SPRITES.STICKER;
+        const size = config.radius * 2;
+        this.setDisplaySize(size, size);
         this.setDepth(GAME_CONFIG.CHASERS.COMMON.DEPTH);
     }
     
@@ -55,8 +50,34 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         this.target = player;
     }
     
+    setFrozen(duration) {
+        // Заморожуємо ворога на певний час
+        this.isFrozen = true;
+        this.frozenTimer = duration;
+        if (this.body) {
+            this.body.setVelocity(0, 0);
+        }
+    }
+    
     update(delta) {
-        if (!this.active || !this.target) return;
+        if (!this.active) return;
+        
+        // Оновлюємо таймер заморозки
+        if (this.isFrozen) {
+            this.frozenTimer -= delta;
+            if (this.frozenTimer <= 0) {
+                this.isFrozen = false;
+                this.frozenTimer = 0;
+            } else {
+                // Під час заморозки не рухаємося
+                if (this.body) {
+                    this.body.setVelocity(0, 0);
+                }
+                return;
+            }
+        }
+        
+        if (!this.target) return;
         
         // Базова логіка руху (перевизначається в підкласах)
         this.moveTowardsTarget(delta);

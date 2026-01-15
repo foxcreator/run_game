@@ -1,5 +1,6 @@
 // Player entity - гравець з рухом, стаміною та dash
 import { GAME_CONFIG } from '../config/gameConfig.js';
+import spriteManager from '../utils/SpriteManager.js';
 
 class Player extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y) {
@@ -40,6 +41,15 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.dashCooldownTimer = 0;
         this.dashDirection = { x: 0, y: 0 };
         
+        // Slide (під стрічку)
+        this.slideDuration = GAME_CONFIG.PLAYER.SLIDE_DURATION;
+        this.slideCooldown = GAME_CONFIG.PLAYER.SLIDE_COOLDOWN;
+        this.slideSpeedMultiplier = GAME_CONFIG.PLAYER.SLIDE_SPEED_MULTIPLIER;
+        this.slideActive = false;
+        this.slideTimer = 0;
+        this.slideCooldownTimer = 0;
+        this.isSliding = false; // Флаг для TapeGate
+        
         // Візуалізація
         this.createVisuals(scene);
         
@@ -47,6 +57,7 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.cursors = scene.input.keyboard.createCursorKeys();
         this.wasd = scene.input.keyboard.addKeys('W,S,A,D');
         this.spaceKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        this.shiftKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
         
         // Флаг для відстеження руху
         this.isMoving = false;
@@ -61,22 +72,19 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         
         // Дебафи швидкості (для перешкод)
         this.speedDebuffs = []; // Масив активних дебафів { multiplier, duration }
+        
+        // Дебафи керованості (для калюж)
+        this.controlDebuffs = []; // Масив активних дебафів { multiplier, duration }
     }
     
     createVisuals(scene) {
-        // Створюємо простий спрайт (коло) для гравця
-        const radius = 15;
-        const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
-        graphics.fillStyle(0x3498db, 1);
-        graphics.fillCircle(radius, radius, radius);
-        graphics.lineStyle(2, 0xffffff, 1);
-        graphics.strokeCircle(radius, radius, radius);
-        graphics.generateTexture('player', radius * 2, radius * 2);
-        graphics.destroy();
+        // Створюємо спрайт гравця через SpriteManager
+        const textureKey = spriteManager.createPlayerSprite(scene);
+        this.setTexture(textureKey);
         
-        // Встановлюємо текстуру
-        this.setTexture('player');
-        this.setDisplaySize(radius * 2, radius * 2);
+        const config = spriteManager.PLAYER_SPRITE;
+        const size = config.radius * 2;
+        this.setDisplaySize(size, size);
         this.setDepth(10); // Гравець завжди поверх тайлів карти
     }
     
@@ -108,6 +116,24 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             }
         }
         
+        // Slide cooldown
+        if (this.slideCooldownTimer > 0) {
+            this.slideCooldownTimer -= delta;
+        }
+        
+        // Slide активний
+        if (this.slideActive) {
+            this.slideTimer -= delta;
+            if (this.slideTimer <= 0) {
+                this.slideActive = false;
+                this.isSliding = false;
+            } else {
+                this.isSliding = true;
+            }
+        } else {
+            this.isSliding = false;
+        }
+        
         // Exhausted стан
         if (this.exhausted) {
             this.exhaustedTimer -= delta;
@@ -131,6 +157,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         
         // Оновлення дебафів швидкості
         this.updateSpeedDebuffs(delta);
+        
+        // Оновлення дебафів керованості
+        this.updateControlDebuffs(delta);
     }
     
     updateSpeedDebuffs(delta) {
@@ -163,6 +192,31 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             // Якщо немає дебафів - повертаємо до 1.0
             this.speedMultiplier = 1.0;
         }
+    }
+    
+    updateControlDebuffs(delta) {
+        // Оновлюємо всі активні дебафи керованості
+        for (let i = this.controlDebuffs.length - 1; i >= 0; i--) {
+            const debuff = this.controlDebuffs[i];
+            debuff.duration -= delta;
+            
+            if (debuff.duration <= 0) {
+                // Дебаф закінчився - видаляємо
+                this.controlDebuffs.splice(i, 1);
+            }
+        }
+    }
+    
+    getControlMultiplier() {
+        // Обчислюємо загальний множник керованості
+        if (this.controlDebuffs.length > 0) {
+            let minMultiplier = 1.0;
+            for (const debuff of this.controlDebuffs) {
+                minMultiplier = Math.min(minMultiplier, debuff.multiplier);
+            }
+            return minMultiplier;
+        }
+        return 1.0;
     }
     
     updateStamina(delta) {
@@ -243,13 +297,23 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             this.performDash(moveX, moveY);
         }
         
+        // Slide (SHIFT)
+        if (Phaser.Input.Keyboard.JustDown(this.shiftKey) && this.canSlide()) {
+            this.performSlide(moveX, moveY);
+        }
+        
         // Обчислення швидкості
         let currentSpeedMultiplier = this.speedMultiplier;
         if (this.dashActive) {
             currentSpeedMultiplier *= this.dashSpeedMultiplier;
+        } else if (this.slideActive) {
+            currentSpeedMultiplier *= this.slideSpeedMultiplier;
         }
         
         this.currentSpeed = this.baseSpeed * currentSpeedMultiplier;
+        
+        // Застосування множника керованості (для калюж)
+        const controlMultiplier = this.getControlMultiplier();
         
         // Застосування швидкості
         if (this.dashActive) {
@@ -258,11 +322,17 @@ class Player extends Phaser.Physics.Arcade.Sprite {
                 this.dashDirection.x * this.currentSpeed,
                 this.dashDirection.y * this.currentSpeed
             );
-        } else {
-            // Звичайний рух
+        } else if (this.slideActive) {
+            // Під час slide рухаємося в напрямку руху з множником керованості
             this.setVelocity(
-                moveX * this.currentSpeed,
-                moveY * this.currentSpeed
+                moveX * this.currentSpeed * controlMultiplier,
+                moveY * this.currentSpeed * controlMultiplier
+            );
+        } else {
+            // Звичайний рух з множником керованості
+            this.setVelocity(
+                moveX * this.currentSpeed * controlMultiplier,
+                moveY * this.currentSpeed * controlMultiplier
             );
         }
     }
@@ -309,6 +379,24 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         }
     }
     
+    canSlide() {
+        return !this.slideActive && 
+               this.slideCooldownTimer <= 0 && 
+               !this.isFrozen &&
+               !this.exhausted;
+    }
+    
+    performSlide(directionX, directionY) {
+        // Якщо немає напрямку, не робимо slide
+        if (directionX === 0 && directionY === 0) return;
+        
+        // Активація slide
+        this.slideActive = true;
+        this.slideTimer = this.slideDuration;
+        this.slideCooldownTimer = this.slideCooldown;
+        this.isSliding = true;
+    }
+    
     updateVisuals() {
         // Оновлюємо колір спрайта залежно від стану
         let tint = 0x3498db; // Синій за замовчуванням
@@ -319,6 +407,8 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             tint = 0xe74c3c; // Червоний коли exhausted
         } else if (this.dashActive) {
             tint = 0xf39c12; // Помаранчевий під час dash
+        } else if (this.slideActive) {
+            tint = 0x2ecc71; // Зелений під час slide
         }
         
         this.setTint(tint);
@@ -365,6 +455,14 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     applySpeedDebuff(multiplier, duration) {
         // Додаємо новий дебаф швидкості
         this.speedDebuffs.push({
+            multiplier: multiplier,
+            duration: duration
+        });
+    }
+    
+    applyControlDebuff(multiplier, duration) {
+        // Додаємо новий дебаф керованості
+        this.controlDebuffs.push({
             multiplier: multiplier,
             duration: duration
         });
