@@ -514,7 +514,7 @@ Acceptance:
 	4.	✅ Obstacle 1–2 (кіоск + черга) + колізії
 	5.	✅ 2 типи ворогів (Sticker + Blocker) з базовим AI
 	6.	Spawner ring + safe radius + cleanup
-	7.	Всі 6 перешкод
+	7.	✅ Всі 6 перешкод
 	8.	Гроші + 4 бонуси + таймери ефектів
 	9.	Difficulty + ChaosLevel
 	10.	3 події (дощ/ремонт/свято)

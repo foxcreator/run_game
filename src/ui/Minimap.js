@@ -58,6 +58,14 @@ class Minimap {
             console.error('Помилка створення graphics:', error);
         }
         
+        // Змінна для зображення міні-карти (якщо використовуємо текстуру)
+        this.minimapImage = null;
+        this.minimapTextureKey = 'minimap_preview';
+        this.minimapCreated = false;
+        
+        // Масив спрайтів кіосків на міні-карті
+        this.kioskIndicators = [];
+        
         // Малюємо карту
         this.drawMap();
         
@@ -81,64 +89,95 @@ class Minimap {
     }
     
     drawMap() {
-        if (!this.minimapGraphics || !this.tilemap || !this.tilemap.mapData) {
+        if (!this.minimapGraphics || !this.tilemap) {
             console.error('Міні-карта: не можу малювати - відсутні дані');
             return;
         }
         
         this.minimapGraphics.clear();
-        let tilesDrawn = 0;
         
         try {
-            // Малюємо всі тайли
-            for (let y = 0; y < this.tilemap.mapHeight; y++) {
-                if (!this.tilemap.mapData[y]) continue;
+            // Перевіряємо чи є текстура карти для міні-карти
+            if (this.scene.textures.exists('map')) {
+                // Створюємо мініатюру тільки один раз
+                if (!this.minimapCreated) {
+                    const mapTexture = this.scene.textures.get('map');
+                    const sourceImage = mapTexture.getSourceImage();
+                    
+                    if (sourceImage) {
+                        // Створюємо мініатюру карти
+                        const minimapCanvas = document.createElement('canvas');
+                        minimapCanvas.width = this.width;
+                        minimapCanvas.height = this.height;
+                        const ctx = minimapCanvas.getContext('2d');
+                        
+                        // Малюємо масштабовану версію карти
+                        ctx.drawImage(
+                            sourceImage,
+                            0, 0, sourceImage.width, sourceImage.height,
+                            0, 0, this.width, this.height
+                        );
+                        
+                        // Створюємо текстуру з мініатюри
+                        if (this.scene.textures.exists(this.minimapTextureKey)) {
+                            this.scene.textures.remove(this.minimapTextureKey);
+                        }
+                        this.scene.textures.addCanvas(this.minimapTextureKey, minimapCanvas);
+                        
+                        // Використовуємо Phaser Image для відображення мініатюри
+                        if (this.minimapImage) {
+                            this.minimapImage.destroy();
+                        }
+                        this.minimapImage = this.scene.add.image(
+                            this.x + this.width / 2,
+                            this.y + this.height / 2,
+                            this.minimapTextureKey
+                        );
+                        this.minimapImage.setScrollFactor(0);
+                        this.minimapImage.setDepth(101);
+                        this.minimapImage.setOrigin(0.5);
+                        
+                        this.minimapCreated = true;
+                    }
+                }
+            } else {
+                // Fallback: малюємо на основі collision map
+                if (!this.tilemap.collisionMap) {
+                    console.warn('Міні-карта: немає даних для відображення');
+                    return;
+                }
                 
-                for (let x = 0; x < this.tilemap.mapWidth; x++) {
-                    const tileType = this.tilemap.mapData[y][x];
-                    if (tileType === undefined) continue;
+                // Малюємо на основі collision map
+                for (let y = 0; y < this.tilemap.mapHeight; y++) {
+                    if (!this.tilemap.collisionMap[y]) continue;
                     
-                    // Перевіряємо чи колір існує (0 є валідним кольором для FENCE)
-                    if (!(tileType in this.tilemap.TILE_COLORS)) continue;
-                    const color = this.tilemap.TILE_COLORS[tileType];
-                    
-                    // Пропускаємо кіоски - вони малюються окремо
-                    if (tileType === this.tilemap.TILE_TYPES.KIOSK) continue;
-                    
-                    // Координати на міні-карті (використовуємо світові координати)
-                    const worldX = x * this.tilemap.tileSize;
-                    const worldY = y * this.tilemap.tileSize;
-                    const minimapX = this.x + worldX * this.scaleX;
-                    const minimapY = this.y + worldY * this.scaleY;
-                    const tileWidth = Math.max(1, this.tilemap.tileSize * this.scaleX); // Мінімум 1 піксель
-                    const tileHeight = Math.max(1, this.tilemap.tileSize * this.scaleY);
-                    
-                    // Малюємо тайл (обрізаємо якщо виходить за межі)
-                    if (minimapX + tileWidth >= this.x && minimapX < this.x + this.width &&
-                        minimapY + tileHeight >= this.y && minimapY < this.y + this.height) {
-                        this.minimapGraphics.fillStyle(color, 0.7);
-                        this.minimapGraphics.fillRect(minimapX, minimapY, tileWidth, tileHeight);
-                        tilesDrawn++;
+                    for (let x = 0; x < this.tilemap.mapWidth; x++) {
+                        const hasCollision = this.tilemap.collisionMap[y][x];
+                        if (hasCollision === undefined) continue;
+                        
+                        // Координати на міні-карті
+                        const worldX = x * this.tilemap.tileSize;
+                        const worldY = y * this.tilemap.tileSize;
+                        const minimapX = this.x + worldX * this.scaleX;
+                        const minimapY = this.y + worldY * this.scaleY;
+                        const tileWidth = Math.max(1, this.tilemap.tileSize * this.scaleX);
+                        const tileHeight = Math.max(1, this.tilemap.tileSize * this.scaleY);
+                        
+                        // Малюємо тайл (обрізаємо якщо виходить за межі)
+                        if (minimapX + tileWidth >= this.x && minimapX < this.x + this.width &&
+                            minimapY + tileHeight >= this.y && minimapY < this.y + this.height) {
+                            // Непрохідні області - темно-червоні/сині
+                            // Прохідні області - світло-зелені
+                            const color = hasCollision ? 0x8b0000 : 0x90ee90;
+                            this.minimapGraphics.fillStyle(color, 0.7);
+                            this.minimapGraphics.fillRect(minimapX, minimapY, tileWidth, tileHeight);
+                        }
                     }
                 }
             }
             
-            // Малюємо кіоски
-            if (this.tilemap.activeKiosks && this.tilemap.activeKiosks.length > 0) {
-                for (const kiosk of this.tilemap.activeKiosks) {
-                    const minimapX = this.x + kiosk.worldX * this.scaleX;
-                    const minimapY = this.y + kiosk.worldY * this.scaleY;
-                    const tileWidth = Math.max(2, this.tilemap.tileSize * this.scaleX); // Кіоски трохи більші
-                    const tileHeight = Math.max(2, this.tilemap.tileSize * this.scaleY);
-                    
-                    // Малюємо кіоск (обрізаємо якщо виходить за межі)
-                    if (minimapX + tileWidth >= this.x && minimapX < this.x + this.width &&
-                        minimapY + tileHeight >= this.y && minimapY < this.y + this.height) {
-                        this.minimapGraphics.fillStyle(this.tilemap.TILE_COLORS[this.tilemap.TILE_TYPES.KIOSK], 0.9);
-                        this.minimapGraphics.fillRect(minimapX, minimapY, tileWidth, tileHeight);
-                    }
-                }
-            }
+            // Малюємо кіоски поверх карти (створюємо окремі спрайти)
+            this.updateKioskIndicators();
         } catch (error) {
             console.error('Помилка малювання міні-карти:', error);
         }
@@ -165,9 +204,54 @@ class Minimap {
         this.viewportIndicator.strokeRect(viewportX, viewportY, viewportWidth, viewportHeight);
     }
     
+    updateKioskIndicators() {
+        // Видаляємо старі індикатори кіосків
+        for (const indicator of this.kioskIndicators) {
+            if (indicator && indicator.active) {
+                indicator.destroy();
+            }
+        }
+        this.kioskIndicators = [];
+        
+        // Створюємо нові індикатори для всіх активних кіосків
+        if (this.tilemap.activeKiosks && this.tilemap.activeKiosks.length > 0) {
+            for (const kiosk of this.tilemap.activeKiosks) {
+                // Перевіряємо чи кіоск активний
+                if (!kiosk.sprite || !kiosk.sprite.active) continue;
+                
+                const minimapX = this.x + kiosk.worldX * this.scaleX;
+                const minimapY = this.y + kiosk.worldY * this.scaleY;
+                const kioskSize = Math.max(4, 10 * this.scaleX); // Кіоски видимі на міні-карті
+                
+                // Перевіряємо чи кіоск в межах міні-карти
+                if (minimapX >= this.x && minimapX < this.x + this.width &&
+                    minimapY >= this.y && minimapY < this.y + this.height) {
+                    // Створюємо спрайт для кіоска на міні-карті
+                    const kioskIndicator = this.scene.add.circle(
+                        minimapX,
+                        minimapY,
+                        kioskSize / 2,
+                        0x0000ff, // Синій для кіосків
+                        0.9
+                    );
+                    kioskIndicator.setScrollFactor(0);
+                    kioskIndicator.setDepth(104); // Вище за мініатюру (101) та viewport (102) та гравця (103)
+                    kioskIndicator.setOrigin(0.5);
+                    
+                    // Зберігаємо посилання на кіоск для оновлення
+                    kioskIndicator.kioskData = kiosk;
+                    
+                    this.kioskIndicators.push(kioskIndicator);
+                }
+            }
+        }
+    }
+    
     refresh() {
         // Оновлюємо карту (наприклад, коли з'являється новий кіоск)
         this.drawMap();
+        // Оновлюємо індикатори кіосків
+        this.updateKioskIndicators();
     }
 }
 

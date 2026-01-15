@@ -1,5 +1,6 @@
 // TilemapSystem - система tilemap для карти світу
 import { GAME_CONFIG } from '../config/gameConfig.js';
+import spriteManager from '../utils/SpriteManager.js';
 
 class TilemapSystem {
     constructor(scene) {
@@ -28,14 +29,14 @@ class TilemapSystem {
             FENCE: 5       // Чорний - колізія
         };
         
-        // Кольори для візуалізації
+        // Кольори для візуалізації (беремо з SpriteManager)
         this.TILE_COLORS = {
-            [this.TILE_TYPES.ROAD]: 0x808080,      // Сірий
-            [this.TILE_TYPES.SIDEWALK]: 0xffd700,  // Жовтий
-            [this.TILE_TYPES.YARD]: 0x228b22,      // Зелений
-            [this.TILE_TYPES.BUILDING]: 0x8b0000, // Червоний
-            [this.TILE_TYPES.KIOSK]: 0x0000ff,     // Синій
-            [this.TILE_TYPES.FENCE]: 0x000000      // Чорний
+            [this.TILE_TYPES.ROAD]: spriteManager.getTileColor('ROAD'),
+            [this.TILE_TYPES.SIDEWALK]: spriteManager.getTileColor('SIDEWALK'),
+            [this.TILE_TYPES.YARD]: spriteManager.getTileColor('YARD'),
+            [this.TILE_TYPES.BUILDING]: spriteManager.getTileColor('BUILDING'),
+            [this.TILE_TYPES.KIOSK]: spriteManager.getTileColor('KIOSK'),
+            [this.TILE_TYPES.FENCE]: spriteManager.getTileColor('FENCE')
         };
         
         // Які тайли мають колізії
@@ -45,18 +46,25 @@ class TilemapSystem {
             this.TILE_TYPES.FENCE
         ];
         
-        // Створюємо дані карти (2D масив)
+        // Створюємо дані карти (2D масив) - тепер використовується для collision map
         this.mapData = [];
+        
+        // Collision map - 2D масив boolean (true = непрохідний)
+        this.collisionMap = [];
+        
+        // Tile type map - 2D масив для зберігання типів тайлів (ROAD, SIDEWALK, etc.)
+        this.tileTypeMap = [];
         
         // Система управління кіосками
         this.activeKiosks = []; // Масив активних кіосків { tileX, tileY, worldX, worldY, sprite, tileSprite }
         this.kioskSprites = []; // Масив спрайтів кіосків для візуалізації
         this.mapGraphics = null; // Графічний об'єкт для карти
+        this.mapSprite = null; // Спрайт готової текстури карти
         
         try {
-            this.generateMap();
+            this.loadCollisionMap();
         } catch (error) {
-            console.error('Помилка генерації карти:', error);
+            console.error('Помилка завантаження collision map:', error);
             throw error;
         }
         
@@ -70,31 +78,130 @@ class TilemapSystem {
         }
     }
     
-    generateMap() {
-        // Ініціалізуємо всю карту як Yard (базовий тип)
-        for (let y = 0; y < this.mapHeight; y++) {
-            this.mapData[y] = [];
-            for (let x = 0; x < this.mapWidth; x++) {
-                this.mapData[y][x] = this.TILE_TYPES.YARD;
+    /**
+     * Завантажує та аналізує collision_map для створення collision map
+     * Червоне та сине = непрохідні області (будівлі та вода)
+     */
+    loadCollisionMap() {
+        // Перевіряємо чи текстура завантажена
+        if (!this.scene.textures.exists('collision_map')) {
+            console.error('❌ Текстура collision_map не знайдена!');
+            // Fallback: створюємо порожню collision map
+            this.initializeEmptyCollisionMap();
+            return;
+        }
+        
+        
+        // Отримуємо текстуру
+        const texture = this.scene.textures.get('collision_map');
+        const sourceImage = texture.getSourceImage();
+        
+        if (!sourceImage) {
+            console.error('❌ Не вдалося отримати зображення з текстури collision_map');
+            this.initializeEmptyCollisionMap();
+            return;
+        }
+        
+        // Створюємо Canvas для аналізу пікселів
+        const canvas = document.createElement('canvas');
+        canvas.width = sourceImage.width;
+        canvas.height = sourceImage.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(sourceImage, 0, 0);
+        
+        // Ініціалізуємо collision map та tile type map
+        this.collisionMap = [];
+        this.tileTypeMap = [];
+        
+        // Масштабуємо collision map до розміру світу
+        const scaleX = this.worldWidth / sourceImage.width;
+        const scaleY = this.worldHeight / sourceImage.height;
+        
+        // Створюємо collision map з роздільною здатністю tileSize
+        for (let tileY = 0; tileY < this.mapHeight; tileY++) {
+            this.collisionMap[tileY] = [];
+            for (let tileX = 0; tileX < this.mapWidth; tileX++) {
+                // Конвертуємо координати тайла в координати на collision_map
+                const worldX = tileX * this.tileSize + this.tileSize / 2;
+                const worldY = tileY * this.tileSize + this.tileSize / 2;
+                
+                // Масштабуємо до розміру collision_map
+                const mapX = Math.floor(worldX / scaleX);
+                const mapY = Math.floor(worldY / scaleY);
+                
+                // Обмежуємо координати
+                const clampedX = Phaser.Math.Clamp(mapX, 0, sourceImage.width - 1);
+                const clampedY = Phaser.Math.Clamp(mapY, 0, sourceImage.height - 1);
+                
+                // Отримуємо піксель
+                const imageData = ctx.getImageData(clampedX, clampedY, 1, 1);
+                const r = imageData.data[0];
+                const g = imageData.data[1];
+                const b = imageData.data[2];
+                
+                // Визначаємо тип тайла та непрохідність
+                // Червоне: переважає червоний канал (r значно більше за g та b)
+                const isRed = r > 150 && r > g * 1.5 && r > b * 1.5 && g < 150 && b < 150;
+                // Синє: переважає синій канал (b значно більше за r та g)
+                const isBlue = b > 150 && b > r * 1.5 && b > g * 1.5 && r < 150 && g < 150;
+                // Сіре: дорога (r, g, b приблизно рівні, середні значення)
+                const isGray = Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30 && 
+                               r > 100 && r < 200 && g > 100 && g < 200 && b > 100 && b < 200;
+                // Жовте: тротуар (r та g високі, b низький)
+                const isYellow = r > 200 && g > 200 && b < 100;
+                
+                // Зберігаємо тип тайла
+                if (!this.tileTypeMap[tileY]) {
+                    this.tileTypeMap[tileY] = [];
+                }
+                if (isGray) {
+                    this.tileTypeMap[tileY][tileX] = this.TILE_TYPES.ROAD;
+                } else if (isYellow) {
+                    this.tileTypeMap[tileY][tileX] = this.TILE_TYPES.SIDEWALK;
+                } else {
+                    this.tileTypeMap[tileY][tileX] = this.TILE_TYPES.YARD;
+                }
+                
+                // Непрохідні області
+                this.collisionMap[tileY][tileX] = isRed || isBlue;
             }
         }
         
-        // Краї карти - огорожі
+        // Краї карти - непрохідні
         for (let x = 0; x < this.mapWidth; x++) {
-            this.mapData[0][x] = this.TILE_TYPES.FENCE;
-            this.mapData[this.mapHeight - 1][x] = this.TILE_TYPES.FENCE;
+            this.collisionMap[0][x] = true;
+            this.collisionMap[this.mapHeight - 1][x] = true;
         }
         for (let y = 0; y < this.mapHeight; y++) {
-            this.mapData[y][0] = this.TILE_TYPES.FENCE;
-            this.mapData[y][this.mapWidth - 1] = this.TILE_TYPES.FENCE;
+            this.collisionMap[y][0] = true;
+            this.collisionMap[y][this.mapWidth - 1] = true;
         }
         
-        // Генеруємо органічну структуру міста (схожу на Дніпро)
-        this.generateOrganicStreets();
-        this.generateSidewalks();
-        this.generateBuildings();
+        
+        // Генеруємо кіоски на прохідних областях
         this.generateKiosks();
-        this.generateParks();
+    }
+    
+    /**
+     * Ініціалізує порожню collision map (fallback)
+     */
+    initializeEmptyCollisionMap() {
+        this.collisionMap = [];
+        this.tileTypeMap = [];
+        for (let y = 0; y < this.mapHeight; y++) {
+            this.collisionMap[y] = [];
+            this.tileTypeMap[y] = [];
+            for (let x = 0; x < this.mapWidth; x++) {
+                // Краї непрохідні
+                if (x === 0 || x === this.mapWidth - 1 || y === 0 || y === this.mapHeight - 1) {
+                    this.collisionMap[y][x] = true;
+                    this.tileTypeMap[y][x] = this.TILE_TYPES.FENCE;
+                } else {
+                    this.collisionMap[y][x] = false;
+                    this.tileTypeMap[y][x] = this.TILE_TYPES.YARD;
+                }
+            }
+        }
     }
     
     generateOrganicStreets() {
@@ -278,25 +385,22 @@ class TilemapSystem {
         const kioskCount = GAME_CONFIG.KIOSKS.COUNT;
         const validPositions = [];
         
-        // Збираємо всі валідні позиції для кіосків (біля доріг)
+        // Збираємо всі валідні позиції для кіосків (прохідні області)
         for (let y = 2; y < this.mapHeight - 2; y++) {
-            if (!this.mapData[y]) continue;
+            if (!this.collisionMap[y]) continue;
             
             for (let x = 2; x < this.mapWidth - 2; x++) {
-                if (this.mapData[y][x] === undefined) continue;
+                if (this.collisionMap[y][x] === undefined) continue;
                 
-                // Пропускаємо дороги та будівлі
-                if (this.mapData[y][x] === this.TILE_TYPES.ROAD || 
-                    this.mapData[y][x] === this.TILE_TYPES.BUILDING ||
-                    this.mapData[y][x] === this.TILE_TYPES.FENCE) continue;
+                // Пропускаємо непрохідні області
+                if (this.collisionMap[y][x]) continue;
                 
-                // Перевіряємо чи є дорога поруч
-                if (this.hasRoadNearby(x, y)) {
-                    // Кіоски можуть бути на тротуарах або дворових зонах
-                    if (this.mapData[y][x] === this.TILE_TYPES.SIDEWALK || 
-                        this.mapData[y][x] === this.TILE_TYPES.YARD) {
-                        validPositions.push({ x, y });
-                    }
+                // Перевіряємо чи є непрохідна область поруч (для реалістичності)
+                const hasCollisionNearby = this.hasCollisionNearby(x, y, 2);
+                
+                // Кіоски можуть бути на прохідних областях, але не далеко від будівель/доріг
+                if (hasCollisionNearby) {
+                    validPositions.push({ x, y });
                 }
             }
         }
@@ -307,7 +411,6 @@ class TilemapSystem {
         
         // Розміщуємо кіоски
         for (const pos of selectedPositions) {
-            this.mapData[pos.y][pos.x] = this.TILE_TYPES.KIOSK;
             const worldPos = this.tileToWorld(pos.x, pos.y);
             
             this.activeKiosks.push({
@@ -317,21 +420,70 @@ class TilemapSystem {
                 worldY: worldPos.y
             });
         }
+        
+    }
+    
+    /**
+     * Перевіряє чи є непрохідна область поруч
+     */
+    hasCollisionNearby(tileX, tileY, radius) {
+        for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+                if (dx === 0 && dy === 0) continue;
+                
+                const checkX = tileX + dx;
+                const checkY = tileY + dy;
+                
+                if (checkX >= 0 && checkX < this.mapWidth &&
+                    checkY >= 0 && checkY < this.mapHeight) {
+                    if (this.collisionMap[checkY] && this.collisionMap[checkY][checkX]) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
     
     createKioskSprites() {
-        // Створюємо спрайти для кіосків
+        // Створюємо спрайти для кіосків через SpriteManager
         for (const kiosk of this.activeKiosks) {
-            // Створюємо спрайт кіоска
-            const kioskColor = this.TILE_COLORS[this.TILE_TYPES.KIOSK]; // 0x0000ff - синій
-            const sprite = this.scene.add.rectangle(
-                kiosk.worldX,
-                kiosk.worldY,
-                this.tileSize,
-                this.tileSize,
-                kioskColor,
-                1.0
-            );
+            const spriteConfig = spriteManager.TILE_SPRITES.KIOSK;
+            let sprite;
+            
+            if (spriteConfig.type === 'texture') {
+                // Використовуємо текстуру
+                const textureKey = spriteConfig.value;
+                
+                if (!this.scene.textures.exists(textureKey)) {
+                    console.error('❌ Текстура не знайдена:', textureKey);
+                    console.error('Доступні текстури:', Object.keys(this.scene.textures.list));
+                    // Fallback на колір якщо текстура не завантажена
+                    sprite = this.scene.add.rectangle(
+                        kiosk.worldX,
+                        kiosk.worldY,
+                        spriteConfig.width,
+                        spriteConfig.height,
+                        0x0000ff, // Синій колір як fallback
+                        1.0
+                    );
+                } else {
+                    sprite = this.scene.add.image(kiosk.worldX, kiosk.worldY, textureKey);
+                    sprite.setDisplaySize(spriteConfig.width, spriteConfig.height);
+                }
+            } else {
+                // Використовуємо колір
+                const kioskColor = spriteConfig.value;
+                sprite = this.scene.add.rectangle(
+                    kiosk.worldX,
+                    kiosk.worldY,
+                    spriteConfig.width,
+                    spriteConfig.height,
+                    kioskColor,
+                    1.0
+                );
+            }
+            
             sprite.setScrollFactor(1);
             sprite.setOrigin(0.5);
             sprite.setDepth(1); // Кіоски поверх тайлів карти (depth 0), але під гравцем (depth 10) та HUD (depth 200+)
@@ -342,26 +494,9 @@ class TilemapSystem {
     }
     
     updateTileVisual(tileX, tileY) {
-        // Оновлюємо візуалізацію конкретного тайла
-        // Створюємо окремий спрайт для тайла, щоб перекрити кіоск
-        const tileType = this.mapData[tileY][tileX];
-        const color = this.TILE_COLORS[tileType];
-        const worldPos = this.tileToWorld(tileX, tileY);
-        
-        // Створюємо спрайт тайла поверх кіоска
-        const tileSprite = this.scene.add.rectangle(
-            worldPos.x,
-            worldPos.y,
-            this.tileSize,
-            this.tileSize,
-            color,
-            0.9
-        );
-        tileSprite.setScrollFactor(1);
-        tileSprite.setOrigin(0.5);
-        tileSprite.setDepth(0); // Тайл під гравцем (depth 10) та кіосками (depth 1)
-        
-        return tileSprite;
+        // Тепер не потрібно, оскільки використовуємо готову текстуру карти
+        // Залишаємо для сумісності, але повертаємо null
+        return null;
     }
     
     removeKiosk(tileX, tileY) {
@@ -373,39 +508,9 @@ class TilemapSystem {
         if (kioskIndex !== -1) {
             const kiosk = this.activeKiosks[kioskIndex];
             
-            // Видаляємо з mapData (повертаємо на попередній тип)
-            // Визначаємо тип тайла до кіоска (тротуар або дворова зона)
-            const neighbors = [
-                { x: tileX - 1, y: tileY },
-                { x: tileX + 1, y: tileY },
-                { x: tileX, y: tileY - 1 },
-                { x: tileX, y: tileY + 1 }
-            ];
-            
-            let newTileType = this.TILE_TYPES.YARD; // За замовчуванням
-            for (const neighbor of neighbors) {
-                if (neighbor.x >= 0 && neighbor.x < this.mapWidth &&
-                    neighbor.y >= 0 && neighbor.y < this.mapHeight) {
-                    const tile = this.mapData[neighbor.y][neighbor.x];
-                    if (tile === this.TILE_TYPES.SIDEWALK) {
-                        newTileType = this.TILE_TYPES.SIDEWALK;
-                        break;
-                    }
-                }
-            }
-            
-            // Оновлюємо mapData
-            this.mapData[tileY][tileX] = newTileType;
-            
-            // Спочатку видаляємо спрайт кіоска
+            // Видаляємо спрайт кіоска
             if (kiosk.sprite) {
                 kiosk.sprite.destroy();
-            }
-            
-            // Потім оновлюємо візуалізацію тайла (створюємо спрайт поверх)
-            const tileSprite = this.updateTileVisual(tileX, tileY);
-            if (tileSprite) {
-                kiosk.tileSprite = tileSprite; // Зберігаємо для можливого видалення
             }
             
             // Видаляємо з масивів
@@ -423,23 +528,21 @@ class TilemapSystem {
         const validPositions = [];
         
         for (let y = 2; y < this.mapHeight - 2; y++) {
-            if (!this.mapData[y]) continue;
+            if (!this.collisionMap[y]) continue;
             
             for (let x = 2; x < this.mapWidth - 2; x++) {
-                if (this.mapData[y][x] === undefined) continue;
+                if (this.collisionMap[y][x] === undefined) continue;
                 
-                // Пропускаємо дороги, будівлі, огорожі та інші кіоски
-                if (this.mapData[y][x] === this.TILE_TYPES.ROAD || 
-                    this.mapData[y][x] === this.TILE_TYPES.BUILDING ||
-                    this.mapData[y][x] === this.TILE_TYPES.FENCE ||
-                    this.mapData[y][x] === this.TILE_TYPES.KIOSK) continue;
+                // Пропускаємо непрохідні області
+                if (this.collisionMap[y][x]) continue;
                 
-                // Перевіряємо чи є дорога поруч
-                if (this.hasRoadNearby(x, y)) {
-                    if (this.mapData[y][x] === this.TILE_TYPES.SIDEWALK || 
-                        this.mapData[y][x] === this.TILE_TYPES.YARD) {
-                        validPositions.push({ x, y });
-                    }
+                // Перевіряємо чи не зайнято іншим кіоском
+                const hasKiosk = this.activeKiosks.some(k => k.tileX === x && k.tileY === y);
+                if (hasKiosk) continue;
+                
+                // Перевіряємо чи є непрохідна область поруч
+                if (this.hasCollisionNearby(x, y, 2)) {
+                    validPositions.push({ x, y });
                 }
             }
         }
@@ -448,9 +551,6 @@ class TilemapSystem {
         
         // Випадково вибираємо позицію
         const randomPos = validPositions[Math.floor(Math.random() * validPositions.length)];
-        
-        // Розміщуємо кіоск
-        this.mapData[randomPos.y][randomPos.x] = this.TILE_TYPES.KIOSK;
         const worldPos = this.tileToWorld(randomPos.x, randomPos.y);
         
         const kiosk = {
@@ -460,16 +560,41 @@ class TilemapSystem {
             worldY: worldPos.y
         };
         
-        // Створюємо спрайт кіоска
-        const kioskColor = this.TILE_COLORS[this.TILE_TYPES.KIOSK]; // 0x0000ff - синій
-        const sprite = this.scene.add.rectangle(
-            kiosk.worldX,
-            kiosk.worldY,
-            this.tileSize,
-            this.tileSize,
-            kioskColor,
-            1.0
-        );
+        // Створюємо спрайт кіоска через SpriteManager
+        const spriteConfig = spriteManager.TILE_SPRITES.KIOSK;
+        let sprite;
+        
+        if (spriteConfig.type === 'texture') {
+            // Використовуємо текстуру
+            // Перевіряємо чи текстура завантажена
+            if (!this.scene.textures.exists(spriteConfig.value)) {
+                console.error('Текстура не знайдена при респавні:', spriteConfig.value);
+                // Fallback на колір якщо текстура не завантажена
+                sprite = this.scene.add.rectangle(
+                    kiosk.worldX,
+                    kiosk.worldY,
+                    spriteConfig.width,
+                    spriteConfig.height,
+                    0x0000ff, // Синій колір як fallback
+                    1.0
+                );
+            } else {
+                sprite = this.scene.add.image(kiosk.worldX, kiosk.worldY, spriteConfig.value);
+                sprite.setDisplaySize(spriteConfig.width, spriteConfig.height);
+            }
+        } else {
+            // Використовуємо колір
+            const kioskColor = spriteConfig.value;
+            sprite = this.scene.add.rectangle(
+                kiosk.worldX,
+                kiosk.worldY,
+                spriteConfig.width,
+                spriteConfig.height,
+                kioskColor,
+                1.0
+            );
+        }
+        
         sprite.setScrollFactor(1);
         sprite.setOrigin(0.5);
         sprite.setDepth(1); // Кіоски поверх тайлів карти (depth 0), але під гравцем (depth 10) та HUD (depth 200+)
@@ -664,55 +789,123 @@ class TilemapSystem {
             throw new Error('Scene не визначено або не має методу add');
         }
         
-        // Оптимізована візуалізація: використовуємо один graphics об'єкт
-        this.mapGraphics = this.scene.add.graphics();
-        this.mapGraphics.setScrollFactor(1); // Слідує за камерою
+        // Масив для зберігання спрайтів тайлів з текстурами (тепер не використовується)
+        this.tileSprites = [];
         
-        // Малюємо всі тайли одним проходом
-        for (let y = 0; y < this.mapHeight; y++) {
-            // Перевіряємо чи рядок існує
-            if (!this.mapData[y]) {
-                console.warn(`Рядок ${y} не існує в mapData`);
-                continue;
-            }
+        // Для culling (рендеринг тільки видимих тайлів)
+        this.camera = this.scene.cameras.main;
+        
+        // Флаг для оптимізації оновлення видимості (не кожен кадр)
+        this.lastVisibilityUpdate = 0;
+        this.visibilityUpdateInterval = 100; // Оновлюємо кожні 100мс
+        
+        // Перевіряємо чи текстура карти завантажена
+        if (!this.scene.textures.exists('map')) {
+            console.error('❌ Текстура map не знайдена! Використовується fallback.');
+            // Fallback: створюємо простий graphics об'єкт
+            this.mapGraphics = this.scene.add.graphics();
+            this.mapGraphics.setScrollFactor(1);
+            this.mapGraphics.fillStyle(0x90EE90, 1.0); // Зелений колір
+            this.mapGraphics.fillRect(0, 0, this.worldWidth, this.worldHeight);
+            return;
+        }
+        
+        // Відображаємо готову текстуру карти
+        this.mapSprite = this.scene.add.image(
+            this.worldWidth / 2,
+            this.worldHeight / 2,
+            'map'
+        );
+        this.mapSprite.setDisplaySize(this.worldWidth, this.worldHeight);
+        this.mapSprite.setScrollFactor(1);
+        this.mapSprite.setDepth(0);
+        this.mapSprite.setOrigin(0.5);
+    }
+    
+    /**
+     * Створює один великий Canvas Texture для всіх тайлів з текстурою одного типу
+     * Це значно оптимізує продуктивність замість тисяч окремих спрайтів
+     */
+    createCanvasTextureForTiles(textureKey, positions) {
+        if (positions.length === 0) return;
+        
+        // Знаходимо межі всіх тайлів (координати вже початкові, не центри)
+        let minX = Infinity, minY = Infinity;
+        let maxX = -Infinity, maxY = -Infinity;
+        
+        for (const pos of positions) {
+            const left = pos.x;
+            const top = pos.y;
+            const right = pos.x + pos.width;
+            const bottom = pos.y + pos.height;
             
-            for (let x = 0; x < this.mapWidth; x++) {
-                const tileType = this.mapData[y][x];
-                // Перевіряємо чи тип тайла валідний (0 є валідним кольором для FENCE)
-                if (tileType === undefined || !(tileType in this.TILE_COLORS)) {
-                    console.warn(`Невалідний тип тайла на позиції (${x}, ${y}): ${tileType}`);
-                    continue;
-                }
-                
-                const color = this.TILE_COLORS[tileType];
-                const worldX = x * this.tileSize;
-                const worldY = y * this.tileSize;
-                
-                // Пропускаємо кіоски - вони малюються окремо
-                if (tileType === this.TILE_TYPES.KIOSK) continue;
-                
-                // Малюємо тайл
-                this.mapGraphics.fillStyle(color, 0.9);
-                this.mapGraphics.fillRect(worldX, worldY, this.tileSize, this.tileSize);
-            }
+            minX = Math.min(minX, left);
+            minY = Math.min(minY, top);
+            maxX = Math.max(maxX, right);
+            maxY = Math.max(maxY, bottom);
         }
         
-        // Додаємо сітку для кращої видимості
-        this.mapGraphics.lineStyle(1, 0x333333, 0.3);
+        const canvasWidth = Math.ceil(maxX - minX);
+        const canvasHeight = Math.ceil(maxY - minY);
         
-        for (let x = 0; x <= this.mapWidth; x++) {
-            const worldX = x * this.tileSize;
-            this.mapGraphics.moveTo(worldX, 0);
-            this.mapGraphics.lineTo(worldX, this.worldHeight);
+        // Створюємо Canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        const ctx = canvas.getContext('2d');
+        
+        // Отримуємо текстуру
+        const sourceTexture = this.scene.textures.get(textureKey);
+        if (!sourceTexture) {
+            console.warn('Текстура не знайдена для Canvas:', textureKey);
+            return;
         }
         
-        for (let y = 0; y <= this.mapHeight; y++) {
-            const worldY = y * this.tileSize;
-            this.mapGraphics.moveTo(0, worldY);
-            this.mapGraphics.lineTo(this.worldWidth, worldY);
+        const sourceImage = sourceTexture.getSourceImage();
+        if (!sourceImage) {
+            console.warn('Зображення текстури не знайдено:', textureKey);
+            return;
         }
         
-        this.mapGraphics.strokePath();
+        // Малюємо всі тайли на Canvas без проміжків
+        // Використовуємо imageSmoothingEnabled = false для чітких піксельних тайлів
+        ctx.imageSmoothingEnabled = false;
+        
+        // Малюємо тайли точно один до одного без проміжків
+        for (const pos of positions) {
+            // Використовуємо точні координати без округлення
+            const drawX = pos.x - minX;
+            const drawY = pos.y - minY;
+            
+            // Малюємо тайл точно по координатах, але з невеликим перекриттям
+            // для заповнення можливих проміжків через округлення при рендерингу
+            ctx.drawImage(
+                sourceImage,
+                0, 0, sourceImage.width, sourceImage.height,
+                drawX - 0.5, drawY - 0.5, pos.width + 1, pos.height + 1
+            );
+        }
+        
+        // Створюємо Phaser Texture з Canvas
+        const canvasTextureKey = `canvas-${textureKey}`;
+        if (this.scene.textures.exists(canvasTextureKey)) {
+            this.scene.textures.remove(canvasTextureKey);
+        }
+        
+        this.scene.textures.addCanvas(canvasTextureKey, canvas);
+        
+        // Створюємо один спрайт з великим Canvas Texture
+        const sprite = this.scene.add.image(
+            minX + canvasWidth / 2,
+            minY + canvasHeight / 2,
+            canvasTextureKey
+        );
+        sprite.setScrollFactor(1);
+        sprite.setDepth(0);
+        sprite.setOrigin(0.5);
+        
+        this.tileSprites.push(sprite);
+        
     }
     
     // Перевірка чи тайл має колізію
@@ -725,13 +918,86 @@ class TilemapSystem {
             return true; // За межами = колізія
         }
         
-        const tileType = this.mapData[tileY][tileX];
-        return this.COLLISION_TILES.includes(tileType);
+        // Використовуємо collision map
+        if (this.collisionMap && this.collisionMap[tileY] && this.collisionMap[tileY][tileX] !== undefined) {
+            return this.collisionMap[tileY][tileX];
+        }
+        
+        // Fallback: перевіряємо старий mapData
+        if (this.mapData && this.mapData[tileY] && this.mapData[tileY][tileX] !== undefined) {
+            const tileType = this.mapData[tileY][tileX];
+            return this.COLLISION_TILES.includes(tileType);
+        }
+        
+        // Якщо немає даних - вважаємо прохідним
+        return false;
     }
     
     // Перевірка чи позиція прохідна (для спавнера)
     isWalkable(worldX, worldY) {
         return !this.hasCollision(worldX, worldY);
+    }
+    
+    // Перевірка чи тайл є дорогою або тротуаром
+    isRoadOrSidewalk(worldX, worldY) {
+        const tileX = Math.floor(worldX / this.tileSize);
+        const tileY = Math.floor(worldY / this.tileSize);
+        
+        if (tileX < 0 || tileX >= this.mapWidth || tileY < 0 || tileY >= this.mapHeight) {
+            return false;
+        }
+        
+        if (this.tileTypeMap && this.tileTypeMap[tileY] && this.tileTypeMap[tileY][tileX] !== undefined) {
+            const tileType = this.tileTypeMap[tileY][tileX];
+            return tileType === this.TILE_TYPES.ROAD || tileType === this.TILE_TYPES.SIDEWALK;
+        }
+        
+        return false;
+    }
+    
+    // Перевірка чи тайл є дорогою (тільки сірий, без тротуарів)
+    isRoad(worldX, worldY) {
+        const tileX = Math.floor(worldX / this.tileSize);
+        const tileY = Math.floor(worldY / this.tileSize);
+        
+        if (tileX < 0 || tileX >= this.mapWidth || tileY < 0 || tileY >= this.mapHeight) {
+            return false;
+        }
+        
+        if (this.tileTypeMap && this.tileTypeMap[tileY] && this.tileTypeMap[tileY][tileX] !== undefined) {
+            const tileType = this.tileTypeMap[tileY][tileX];
+            return tileType === this.TILE_TYPES.ROAD;
+        }
+        
+        return false;
+    }
+    
+    // Перевірка чи область (кілька тайлів) є дорогою або тротуаром
+    isAreaRoadOrSidewalk(worldX, worldY, sizeInTiles) {
+        const startTileX = Math.floor(worldX / this.tileSize);
+        const startTileY = Math.floor(worldY / this.tileSize);
+        
+        for (let dy = 0; dy < sizeInTiles; dy++) {
+            for (let dx = 0; dx < sizeInTiles; dx++) {
+                const tileX = startTileX + dx;
+                const tileY = startTileY + dy;
+                
+                if (tileX < 0 || tileX >= this.mapWidth || tileY < 0 || tileY >= this.mapHeight) {
+                    return false;
+                }
+                
+                if (this.tileTypeMap && this.tileTypeMap[tileY] && this.tileTypeMap[tileY][tileX] !== undefined) {
+                    const tileType = this.tileTypeMap[tileY][tileX];
+                    if (tileType !== this.TILE_TYPES.ROAD && tileType !== this.TILE_TYPES.SIDEWALK) {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+        }
+        
+        return true;
     }
     
     // Отримати тип тайла
@@ -743,7 +1009,18 @@ class TilemapSystem {
             return this.TILE_TYPES.FENCE; // За межами = огорожа
         }
         
-        return this.mapData[tileY][tileX];
+        // Використовуємо collision map для визначення типу
+        if (this.collisionMap && this.collisionMap[tileY] && this.collisionMap[tileY][tileX]) {
+            return this.TILE_TYPES.BUILDING; // Непрохідна область = будівля
+        }
+        
+        // Fallback: перевіряємо старий mapData
+        if (this.mapData && this.mapData[tileY] && this.mapData[tileY][tileX] !== undefined) {
+            return this.mapData[tileY][tileX];
+        }
+        
+        // За замовчуванням - прохідна область
+        return this.TILE_TYPES.YARD;
     }
     
     // Конвертація світових координат в тайл координати
@@ -760,6 +1037,110 @@ class TilemapSystem {
             x: tileX * this.tileSize + this.tileSize / 2,
             y: tileY * this.tileSize + this.tileSize / 2
         };
+    }
+    
+    /**
+     * Отримує напрямок руху з collision map за кольором пікселя
+     * #000000 (чорний) = right
+     * #FFFFFF (білий) = left
+     * #EF3EDA (рожевий) = up
+     * #4998F5 (блакитний) = down
+     * Повертає null якщо напрямок не визначено
+     */
+    getDirectionFromCollisionMap(worldX, worldY) {
+        if (!this.scene || !this.scene.textures.exists('collision_map')) {
+            return null;
+        }
+        
+        const texture = this.scene.textures.get('collision_map');
+        const sourceImage = texture.getSourceImage();
+        
+        if (!sourceImage) {
+            return null;
+        }
+        
+        // Масштабуємо координати
+        const scaleX = sourceImage.width / this.worldWidth;
+        const scaleY = sourceImage.height / this.worldHeight;
+        
+        const mapX = Math.floor(worldX * scaleX);
+        const mapY = Math.floor(worldY * scaleY);
+        
+        // Обмежуємо межі
+        const clampedX = Phaser.Math.Clamp(mapX, 0, sourceImage.width - 1);
+        const clampedY = Phaser.Math.Clamp(mapY, 0, sourceImage.height - 1);
+        
+        // Читаємо піксель
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(sourceImage, clampedX, clampedY, 1, 1, 0, 0, 1, 1);
+        const imageData = ctx.getImageData(0, 0, 1, 1);
+        const r = imageData.data[0];
+        const g = imageData.data[1];
+        const b = imageData.data[2];
+        
+        // Визначаємо напрямок за точними кольорами
+        // #000000 (чорний) = right - r, g, b всі 0 або близькі до 0
+        if (r < 30 && g < 30 && b < 30) {
+            return 'right';
+        }
+        
+        // #FFFFFF (білий) = left - r, g, b всі 255 або близькі до 255
+        if (r > 240 && g > 240 && b > 240) {
+            return 'left';
+        }
+        
+        // #EF3EDA (рожевий) = up
+        // EF = 239, 3E = 62, DA = 218
+        // r ≈ 239, g ≈ 62, b ≈ 218
+        if (r > 200 && r < 255 && g > 40 && g < 100 && b > 180 && b < 255) {
+            return 'up';
+        }
+        
+        // #4998F5 (блакитний) = down
+        // 49 = 73, 98 = 152, F5 = 245
+        // r ≈ 73, g ≈ 152, b ≈ 245
+        if (r > 50 && r < 100 && g > 120 && g < 180 && b > 220 && b < 255) {
+            return 'down';
+        }
+        
+        // Якщо не визначено - повертаємо null
+        return null;
+    }
+    
+    /**
+     * Оновлення видимості спрайтів (culling)
+     * Приховує спрайти, які не видимі в viewport камери
+     * Оптимізовано: оновлюється не кожен кадр, а з інтервалом
+     */
+    updateVisibility(time) {
+        if (!this.camera || !this.tileSprites) return;
+        
+        // Оптимізація: оновлюємо не кожен кадр
+        if (time && time - this.lastVisibilityUpdate < this.visibilityUpdateInterval) {
+            return;
+        }
+        this.lastVisibilityUpdate = time || 0;
+        
+        const viewport = this.camera.worldView;
+        const margin = 200; // Margin для плавності (більший для Canvas Texture)
+        
+        for (const sprite of this.tileSprites) {
+            if (!sprite || !sprite.active) continue;
+            
+            // Для Canvas Texture спрайтів перевіряємо чи перетинаються з viewport
+            const spriteBounds = sprite.getBounds();
+            const isVisible = (
+                spriteBounds.right >= viewport.x - margin &&
+                spriteBounds.left <= viewport.x + viewport.width + margin &&
+                spriteBounds.bottom >= viewport.y - margin &&
+                spriteBounds.top <= viewport.y + viewport.height + margin
+            );
+            
+            sprite.setVisible(isVisible);
+        }
     }
 }
 

@@ -5,8 +5,19 @@ class BootScene extends Phaser.Scene {
     }
 
     preload() {
-        // Тут буде завантаження ресурсів пізніше
-        // Поки що просто переходимо до меню
+        // Завантажуємо текстуру кіоска
+        // Спробуємо різні варіанти шляху
+        this.load.image('kiosk', './src/assets/textures/kiosk.png');
+        this.load.image('grass', './src/assets/textures/grass.png');
+        
+        // Завантажуємо текстури карти
+        this.load.image('map', './src/assets/textures/map.jpeg');
+        this.load.image('collision_map', './src/assets/textures/collision_map.jpeg');
+        
+        // Обробка помилок завантаження
+        this.load.on('loaderror', (file) => {
+            console.error('❌ Помилка завантаження файлу:', file.key, file.url);
+        });
     }
 
     create() {

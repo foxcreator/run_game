@@ -34,11 +34,10 @@ class MenuScene extends Phaser.Scene {
             0x3498db,
             0x2980b9,
             () => {
-                console.log('Start button clicked, starting GameScene');
                 try {
                     this.scene.start('GameScene');
                 } catch (error) {
-                    console.error('Error starting GameScene:', error);
+                    console.error('Помилка запуску GameScene:', error);
                     alert('Помилка запуску гри: ' + error.message);
                 }
             }
@@ -55,7 +54,6 @@ class MenuScene extends Phaser.Scene {
             0x95a5a6,
             0x7f8c8d,
             () => {
-                console.log('Shop button clicked');
                 this.scene.start('ShopScene');
             }
         );
