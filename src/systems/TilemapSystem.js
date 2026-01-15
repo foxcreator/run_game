@@ -1040,6 +1040,91 @@ class TilemapSystem {
     }
     
     /**
+     * Визначає напрямок дороги в заданій позиції
+     * Повертає: 'horizontal', 'vertical', 'intersection', або null
+     */
+    getRoadDirection(worldX, worldY) {
+        const tile = this.worldToTile(worldX, worldY);
+        
+        if (tile.x < 0 || tile.x >= this.mapWidth || tile.y < 0 || tile.y >= this.mapHeight) {
+            return null;
+        }
+        
+        // Перевіряємо чи це дорога
+        if (!this.isRoad(worldX, worldY)) {
+            return null;
+        }
+        
+        // Перевіряємо сусідні тайли для визначення напрямку
+        const checkDistance = 2; // Перевіряємо 2 тайли в кожну сторону
+        let hasRoadLeft = false;
+        let hasRoadRight = false;
+        let hasRoadUp = false;
+        let hasRoadDown = false;
+        
+        // Перевіряємо горизонтальний напрямок
+        for (let i = 1; i <= checkDistance; i++) {
+            if (tile.x - i >= 0) {
+                const worldPos = this.tileToWorld(tile.x - i, tile.y);
+                if (this.isRoad(worldPos.x, worldPos.y)) {
+                    hasRoadLeft = true;
+                    break;
+                }
+            }
+        }
+        for (let i = 1; i <= checkDistance; i++) {
+            if (tile.x + i < this.mapWidth) {
+                const worldPos = this.tileToWorld(tile.x + i, tile.y);
+                if (this.isRoad(worldPos.x, worldPos.y)) {
+                    hasRoadRight = true;
+                    break;
+                }
+            }
+        }
+        
+        // Перевіряємо вертикальний напрямок
+        for (let i = 1; i <= checkDistance; i++) {
+            if (tile.y - i >= 0) {
+                const worldPos = this.tileToWorld(tile.x, tile.y - i);
+                if (this.isRoad(worldPos.x, worldPos.y)) {
+                    hasRoadUp = true;
+                    break;
+                }
+            }
+        }
+        for (let i = 1; i <= checkDistance; i++) {
+            if (tile.y + i < this.mapHeight) {
+                const worldPos = this.tileToWorld(tile.x, tile.y + i);
+                if (this.isRoad(worldPos.x, worldPos.y)) {
+                    hasRoadDown = true;
+                    break;
+                }
+            }
+        }
+        
+        const hasHorizontal = hasRoadLeft || hasRoadRight;
+        const hasVertical = hasRoadUp || hasRoadDown;
+        
+        // Якщо є і горизонтальна і вертикальна дорога - це перехрестя
+        if (hasHorizontal && hasVertical) {
+            return 'intersection';
+        }
+        
+        // Якщо тільки горизонтальна - горизонтальна дорога
+        if (hasHorizontal && !hasVertical) {
+            return 'horizontal';
+        }
+        
+        // Якщо тільки вертикальна - вертикальна дорога
+        if (hasVertical && !hasHorizontal) {
+            return 'vertical';
+        }
+        
+        // Якщо немає сусідніх доріг - невизначено
+        return null;
+    }
+    
+    /**
      * Отримує напрямок руху з collision map за кольором пікселя
      * #000000 (чорний) = right
      * #FFFFFF (білий) = left
