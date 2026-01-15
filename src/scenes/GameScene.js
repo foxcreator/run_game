@@ -28,28 +28,12 @@ class GameScene extends Phaser.Scene {
         }
         
         // Завантажуємо текстури авто (якщо не завантажені в BootScene)
-        // Це критично важливо, бо GameScene може запуститися до завершення завантаження в BootScene
         if (!this.textures.exists('car_red')) {
-            console.log('🚗 GameScene preload: Завантажуємо car_red');
             this.load.image('car_red', './src/assets/textures/cars/red_car.png');
-        } else {
-            console.log('🚗 GameScene preload: car_red вже завантажена');
         }
-        
         if (!this.textures.exists('car_white')) {
-            console.log('🚗 GameScene preload: Завантажуємо car_white');
             this.load.image('car_white', './src/assets/textures/cars/white_car.png');
-        } else {
-            console.log('🚗 GameScene preload: car_white вже завантажена');
         }
-        
-        // Логування після завантаження
-        this.load.on('filecomplete-image-car_red', () => {
-            console.log('✅ GameScene: Текстура car_red завантажена');
-        });
-        this.load.on('filecomplete-image-car_white', () => {
-            console.log('✅ GameScene: Текстура car_white завантажена');
-        });
     }
 
     create() {
@@ -318,32 +302,17 @@ class GameScene extends Phaser.Scene {
     }
     
     spawnCars() {
-        console.log('🚗 spawnCars: Початок спавну авто');
-        
         // Перевіряємо чи текстури завантажені
         const carTextures = GAME_CONFIG.OBSTACLES.MOVING_BUS.CAR_TEXTURES || [];
-        console.log('🚗 spawnCars: CAR_TEXTURES з конфігу:', carTextures);
-        
-        // Перевіряємо всі текстури
-        const allTextures = Object.keys(this.textures.list);
-        console.log('🚗 spawnCars: Всі текстури в Phaser:', allTextures);
-        
-        const availableTextures = carTextures.filter(key => {
-            const exists = this.textures.exists(key);
-            console.log(`🚗 spawnCars: Текстура ${key} існує:`, exists);
-            return exists;
-        });
-        console.log('🚗 spawnCars: Доступні текстури авто:', availableTextures);
+        const availableTextures = carTextures.filter(key => this.textures.exists(key));
         
         if (availableTextures.length === 0) {
-            console.error('🚗 spawnCars: ❌ Немає доступних текстур авто!');
-            console.error('🚗 spawnCars: Перевірте чи текстури завантажені в BootScene.js');
+            console.error('❌ Немає доступних текстур авто! Перевірте чи текстури завантажені в BootScene.js');
             return;
         }
         
         // Видаляємо всі існуючі авто
         const carsToRemove = this.obstacles.filter(obs => obs instanceof Car);
-        console.log(`🚗 spawnCars: Видаляємо ${carsToRemove.length} існуючих авто`);
         for (const car of carsToRemove) {
             if (car.active) {
                 car.destroy();
@@ -358,47 +327,54 @@ class GameScene extends Phaser.Scene {
         const minCount = GAME_CONFIG.OBSTACLES.MOVING_BUS.MIN_COUNT;
         const maxCount = GAME_CONFIG.OBSTACLES.MOVING_BUS.MAX_COUNT;
         const targetCount = Phaser.Math.Between(minCount, maxCount);
-        console.log(`🚗 spawnCars: Плануємо створити ${targetCount} авто (min: ${minCount}, max: ${maxCount})`);
         
-        let spawnedCount = 0;
         for (let i = 0; i < targetCount; i++) {
-            const result = this.spawnSingleCar();
-            if (result) {
-                spawnedCount++;
-            }
+            this.spawnSingleCar();
         }
-        
-        console.log(`🚗 spawnCars: ✅ Створено ${spawnedCount} з ${targetCount} авто`);
     }
     
     spawnSingleCar() {
         if (!this.tilemap) {
-            console.warn('spawnSingleCar: Tilemap не ініціалізована');
-            return;
+            return false;
         }
         
         // Шукаємо випадкову позицію на дорозі
         let attempts = 0;
-        const maxAttempts = 50;
+        const maxAttempts = 200;
         let spawnX, spawnY;
         let foundRoad = false;
+        
+        const config = GAME_CONFIG.OBSTACLES.MOVING_BUS;
+        const minDistanceFromOtherCars = config.MIN_DISTANCE_BETWEEN_CARS || 60;
         
         while (attempts < maxAttempts && !foundRoad) {
             attempts++;
             
-            // Генеруємо випадкову позицію на карті
-            spawnX = Phaser.Math.Between(100, this.worldWidth - 100);
-            spawnY = Phaser.Math.Between(100, this.worldHeight - 100);
+            spawnX = Phaser.Math.Between(50, this.worldWidth - 50);
+            spawnY = Phaser.Math.Between(50, this.worldHeight - 50);
             
-            // Перевіряємо чи це дорога та без колізій
-            if (this.tilemap.isRoad(spawnX, spawnY) && !this.tilemap.hasCollision(spawnX, spawnY)) {
+            if (!this.tilemap.isRoad(spawnX, spawnY) || this.tilemap.hasCollision(spawnX, spawnY)) {
+                continue;
+            }
+            
+            // Перевіряємо чи немає інших авто поруч
+            let tooCloseToOtherCar = false;
+            const existingCars = this.obstacles.filter(obs => obs instanceof Car && obs.active);
+            for (const car of existingCars) {
+                const distance = Phaser.Math.Distance.Between(spawnX, spawnY, car.x, car.y);
+                if (distance < minDistanceFromOtherCars) {
+                    tooCloseToOtherCar = true;
+                    break;
+                }
+            }
+            
+            if (!tooCloseToOtherCar) {
                 foundRoad = true;
             }
         }
         
         if (!foundRoad) {
-            console.warn('spawnSingleCar: Не знайдено дорогу для спавну авто');
-            return;
+            return false;
         }
         
         // Отримуємо текстуру по черзі
@@ -406,25 +382,25 @@ class GameScene extends Phaser.Scene {
         const availableTextures = carTextures.filter(key => this.textures.exists(key));
         
         if (availableTextures.length === 0) {
-            console.warn('🚗 spawnSingleCar: Немає доступних текстур авто');
-            console.warn('🚗 spawnSingleCar: CAR_TEXTURES з конфігу:', carTextures);
-            console.warn('🚗 spawnSingleCar: Всі текстури в Phaser:', Object.keys(this.textures.list));
             return false;
         }
         
         // Обираємо текстуру по черзі (циклічно)
         const textureKey = availableTextures[this.carTextureIndex % availableTextures.length];
-        this.carTextureIndex++; // Збільшуємо індекс для наступного авто
+        this.carTextureIndex++;
         
         // Створюємо авто на дорозі
         try {
             const car = new Car(this, spawnX, spawnY, textureKey);
             if (car) {
                 this.obstacles.push(car);
+                return true;
             }
         } catch (error) {
             console.error('Помилка створення автомобіля:', error);
         }
+        
+        return false;
     }
     
     setupObstacleCollisions() {
@@ -495,10 +471,32 @@ class GameScene extends Phaser.Scene {
         
         if (cars.length === 0) return;
         
+        const config = GAME_CONFIG.OBSTACLES.MOVING_BUS;
+        const carCollisionRadius = config.COLLISION_RADIUS || 25;
+        
+        // Колізії між авто (ДТП)
+        for (let i = 0; i < cars.length; i++) {
+            const car1 = cars[i];
+            if (!car1.active || car1.isAccident) continue;
+            
+            for (let j = i + 1; j < cars.length; j++) {
+                const car2 = cars[j];
+                if (!car2.active || car2.isAccident) continue;
+                
+                const distance = Phaser.Math.Distance.Between(car1.x, car1.y, car2.x, car2.y);
+                const minDistance = carCollisionRadius * 2; // Радіус двох авто
+                
+                if (distance < minDistance) {
+                    // ДТП!
+                    car1.handleAccident(car2);
+                }
+            }
+        }
+        
         // Колізії з гравцем (вже обробляються через handleObstacleCollision)
         // Колізії з ворогами
         for (const car of cars) {
-            if (!car.active) continue;
+            if (!car.active || car.isAccident) continue; // Пропускаємо авто в ДТП
             
             // Перевіряємо колізію з гравцем
             if (this.player && this.player.active && !this.player.isFrozen) {
