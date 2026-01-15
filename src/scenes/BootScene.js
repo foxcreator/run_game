@@ -18,6 +18,39 @@ class BootScene extends Phaser.Scene {
         this.load.image('car_red', './src/assets/textures/cars/red_car.png');
         this.load.image('car_white', './src/assets/textures/cars/white_car.png');
         
+        // Завантажуємо текстури гравця
+        // Standing (статичні пози)
+        this.load.image('standing_front', './src/assets/textures/player/standing_front.png');
+        this.load.image('standing_rear', './src/assets/textures/player/standing_rear.png');
+        this.load.image('standing_left', './src/assets/textures/player/standing_left.png');
+        this.load.image('standing_right', './src/assets/textures/player/standing_right.png');
+        
+        // Running animations (біг по напрямках)
+        this.load.image('front_1', './src/assets/textures/player/front_1.png');
+        this.load.image('front_2', './src/assets/textures/player/front_2.png');
+        this.load.image('front_3', './src/assets/textures/player/front_3.png');
+        this.load.image('front_4', './src/assets/textures/player/front_4.png');
+        
+        this.load.image('rear_1', './src/assets/textures/player/rear_1.png');
+        this.load.image('rear_2', './src/assets/textures/player/rear_2.png');
+        this.load.image('rear_3', './src/assets/textures/player/rear_3.png');
+        this.load.image('rear_4', './src/assets/textures/player/rear_4.png');
+        
+        this.load.image('left_1', './src/assets/textures/player/left_1.png');
+        this.load.image('left_2', './src/assets/textures/player/left_2.png');
+        this.load.image('left_3', './src/assets/textures/player/left_3.png');
+        this.load.image('left_4', './src/assets/textures/player/left_4.png');
+        
+        this.load.image('right_1', './src/assets/textures/player/right_1.png');
+        this.load.image('right_2', './src/assets/textures/player/right_2.png');
+        this.load.image('right_3', './src/assets/textures/player/right_3.png');
+        this.load.image('right_4', './src/assets/textures/player/right_4.png');
+        
+        // Спеціальні анімації
+        this.load.image('sliding', './src/assets/textures/player/sliding.png');
+        this.load.image('fall_1', './src/assets/textures/player/fall_1.png');
+        this.load.image('fall_2', './src/assets/textures/player/fall_2.png');
+        
         // Обробка помилок завантаження
         this.load.on('loaderror', (file) => {
             console.error('❌ Помилка завантаження файлу:', file.key, file.url);

@@ -594,6 +594,11 @@ class Car extends Phaser.GameObjects.Image {
             GAME_CONFIG.OBSTACLES.MOVING_BUS.FREEZE_DURATION_MAX
         );
 
+        // Якщо це гравець - запускаємо анімацію падіння
+        if (entity.type === 'Player' && entity.triggerFall) {
+            entity.triggerFall();
+        }
+
         if (entity.freeze) { entity.freeze(freezeDuration); }
         else if (entity.setFrozen) { entity.setFrozen(freezeDuration); }
 
