@@ -17,6 +17,8 @@ import { GAME_CONFIG } from '../config/gameConfig.js';
 class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
+        // Лічильник для циклічного вибору текстур авто
+        this.carTextureIndex = 0;
     }
     
     preload() {
@@ -50,7 +52,6 @@ class GameScene extends Phaser.Scene {
         
         // Створюємо систему обходу перешкод (pathfinding)
         this.pathfindingSystem = new PathfindingSystem(this.tilemap);
-        
 
         // Знаходимо прохідний тайл для старту гравця (біля центру)
         const startPos = this.findWalkablePosition(this.worldWidth / 2, this.worldHeight / 2);
@@ -317,31 +318,51 @@ class GameScene extends Phaser.Scene {
     }
     
     spawnSingleCar() {
-        // Генеруємо випадкову позицію на карті
-        let spawnX = Phaser.Math.Between(100, this.worldWidth - 100);
-        let spawnY = Phaser.Math.Between(100, this.worldHeight - 100);
-        
-        // Шукаємо позицію на дорозі (сірий тайл, тільки дорога)
-        let attempts = 0;
-        const maxAttempts = 50;
-        
-        while (attempts < maxAttempts) {
-            if (this.tilemap.isRoad(spawnX, spawnY)) {
-                break;
-            }
-            
-            // Генеруємо нову позицію
-            spawnX = Phaser.Math.Between(100, this.worldWidth - 100);
-            spawnY = Phaser.Math.Between(100, this.worldHeight - 100);
-            attempts++;
+        if (!this.tilemap) {
+            console.warn('spawnSingleCar: Tilemap не ініціалізована');
+            return;
         }
         
-        // Якщо не знайшли дорогу - використовуємо поточну позицію
-        // (Car сам знайде найближчу дорогу)
+        // Шукаємо випадкову позицію на дорозі
+        let attempts = 0;
+        const maxAttempts = 50;
+        let spawnX, spawnY;
+        let foundRoad = false;
         
-        // Створюємо авто
+        while (attempts < maxAttempts && !foundRoad) {
+            attempts++;
+            
+            // Генеруємо випадкову позицію на карті
+            spawnX = Phaser.Math.Between(100, this.worldWidth - 100);
+            spawnY = Phaser.Math.Between(100, this.worldHeight - 100);
+            
+            // Перевіряємо чи це дорога та без колізій
+            if (this.tilemap.isRoad(spawnX, spawnY) && !this.tilemap.hasCollision(spawnX, spawnY)) {
+                foundRoad = true;
+            }
+        }
+        
+        if (!foundRoad) {
+            console.warn('spawnSingleCar: Не знайдено дорогу для спавну авто');
+            return;
+        }
+        
+        // Отримуємо текстуру по черзі
+        const carTextures = GAME_CONFIG.OBSTACLES.MOVING_BUS.CAR_TEXTURES || [];
+        const availableTextures = carTextures.filter(key => this.textures.exists(key));
+        
+        if (availableTextures.length === 0) {
+            console.warn('spawnSingleCar: Немає доступних текстур авто');
+            return;
+        }
+        
+        // Обираємо текстуру по черзі (циклічно)
+        const textureKey = availableTextures[this.carTextureIndex % availableTextures.length];
+        this.carTextureIndex++; // Збільшуємо індекс для наступного авто
+        
+        // Створюємо авто на дорозі
         try {
-            const car = new Car(this, spawnX, spawnY);
+            const car = new Car(this, spawnX, spawnY, textureKey);
             if (car) {
                 this.obstacles.push(car);
             }
@@ -693,6 +714,7 @@ class GameScene extends Phaser.Scene {
             this.minimap.update();
         }
         
+        
         // Оновлення видимості тайлів (culling для оптимізації)
         if (this.tilemap && this.tilemap.updateVisibility) {
             this.tilemap.updateVisibility(time);
@@ -711,18 +733,21 @@ class GameScene extends Phaser.Scene {
         if (this.carSpawnTimer !== undefined) {
             this.carSpawnTimer += delta;
             
-            // Перевіряємо кількість активних авто
-            const activeCars = this.obstacles.filter(obs => obs instanceof Car && obs.active);
+            // Перевіряємо кількість активних авто (тільки ті що дійсно існують та рухаються)
+            const activeCars = this.obstacles.filter(obs => {
+                if (!(obs instanceof Car)) return false;
+                if (!obs.active) return false;
+                // Перевіряємо чи авто дійсно існує та має body
+                if (!obs.body || !obs.scene) return false;
+                return true;
+            });
+            
             const minCars = GAME_CONFIG.OBSTACLES.MOVING_BUS.MIN_COUNT;
             const maxCars = GAME_CONFIG.OBSTACLES.MOVING_BUS.MAX_COUNT;
             
-            // Якщо менше мінімуму - спавнимо одразу
-            if (activeCars.length < minCars) {
-                // Спавнимо кілька авто одразу, щоб досягти мінімуму
-                const carsToSpawn = minCars - activeCars.length;
-                for (let i = 0; i < carsToSpawn; i++) {
-                    this.spawnSingleCar();
-                }
+            // Якщо менше мінімуму - спавнимо одразу (але не більше 1 за кадр)
+            if (activeCars.length < minCars && this.carSpawnTimer >= 100) {
+                this.spawnSingleCar();
                 this.carSpawnTimer = 0;
             }
             // Якщо менше максимуму та пройшов інтервал - спавнимо нове авто
