@@ -26,6 +26,30 @@ class GameScene extends Phaser.Scene {
         if (!this.textures.exists('kiosk')) {
             this.load.image('kiosk', './src/assets/textures/kiosk.png');
         }
+        
+        // Завантажуємо текстури авто (якщо не завантажені в BootScene)
+        // Це критично важливо, бо GameScene може запуститися до завершення завантаження в BootScene
+        if (!this.textures.exists('car_red')) {
+            console.log('🚗 GameScene preload: Завантажуємо car_red');
+            this.load.image('car_red', './src/assets/textures/cars/red_car.png');
+        } else {
+            console.log('🚗 GameScene preload: car_red вже завантажена');
+        }
+        
+        if (!this.textures.exists('car_white')) {
+            console.log('🚗 GameScene preload: Завантажуємо car_white');
+            this.load.image('car_white', './src/assets/textures/cars/white_car.png');
+        } else {
+            console.log('🚗 GameScene preload: car_white вже завантажена');
+        }
+        
+        // Логування після завантаження
+        this.load.on('filecomplete-image-car_red', () => {
+            console.log('✅ GameScene: Текстура car_red завантажена');
+        });
+        this.load.on('filecomplete-image-car_white', () => {
+            console.log('✅ GameScene: Текстура car_white завантажена');
+        });
     }
 
     create() {
@@ -213,7 +237,7 @@ class GameScene extends Phaser.Scene {
         
         // Налаштовуємо таймер для спавну нових авто
         this.carSpawnTimer = 0;
-        this.carSpawnInterval = GAME_CONFIG.OBSTACLES.MOVING_BUS.SPAWN_INTERVAL;
+        this.carSpawnInterval = 1000; // Інтервал спавну авто (1 секунда)
     }
     
     spawnPuddles() {
@@ -294,8 +318,32 @@ class GameScene extends Phaser.Scene {
     }
     
     spawnCars() {
+        console.log('🚗 spawnCars: Початок спавну авто');
+        
+        // Перевіряємо чи текстури завантажені
+        const carTextures = GAME_CONFIG.OBSTACLES.MOVING_BUS.CAR_TEXTURES || [];
+        console.log('🚗 spawnCars: CAR_TEXTURES з конфігу:', carTextures);
+        
+        // Перевіряємо всі текстури
+        const allTextures = Object.keys(this.textures.list);
+        console.log('🚗 spawnCars: Всі текстури в Phaser:', allTextures);
+        
+        const availableTextures = carTextures.filter(key => {
+            const exists = this.textures.exists(key);
+            console.log(`🚗 spawnCars: Текстура ${key} існує:`, exists);
+            return exists;
+        });
+        console.log('🚗 spawnCars: Доступні текстури авто:', availableTextures);
+        
+        if (availableTextures.length === 0) {
+            console.error('🚗 spawnCars: ❌ Немає доступних текстур авто!');
+            console.error('🚗 spawnCars: Перевірте чи текстури завантажені в BootScene.js');
+            return;
+        }
+        
         // Видаляємо всі існуючі авто
         const carsToRemove = this.obstacles.filter(obs => obs instanceof Car);
+        console.log(`🚗 spawnCars: Видаляємо ${carsToRemove.length} існуючих авто`);
         for (const car of carsToRemove) {
             if (car.active) {
                 car.destroy();
@@ -310,11 +358,17 @@ class GameScene extends Phaser.Scene {
         const minCount = GAME_CONFIG.OBSTACLES.MOVING_BUS.MIN_COUNT;
         const maxCount = GAME_CONFIG.OBSTACLES.MOVING_BUS.MAX_COUNT;
         const targetCount = Phaser.Math.Between(minCount, maxCount);
+        console.log(`🚗 spawnCars: Плануємо створити ${targetCount} авто (min: ${minCount}, max: ${maxCount})`);
         
+        let spawnedCount = 0;
         for (let i = 0; i < targetCount; i++) {
-            this.spawnSingleCar();
+            const result = this.spawnSingleCar();
+            if (result) {
+                spawnedCount++;
+            }
         }
         
+        console.log(`🚗 spawnCars: ✅ Створено ${spawnedCount} з ${targetCount} авто`);
     }
     
     spawnSingleCar() {
@@ -352,8 +406,10 @@ class GameScene extends Phaser.Scene {
         const availableTextures = carTextures.filter(key => this.textures.exists(key));
         
         if (availableTextures.length === 0) {
-            console.warn('spawnSingleCar: Немає доступних текстур авто');
-            return;
+            console.warn('🚗 spawnSingleCar: Немає доступних текстур авто');
+            console.warn('🚗 spawnSingleCar: CAR_TEXTURES з конфігу:', carTextures);
+            console.warn('🚗 spawnSingleCar: Всі текстури в Phaser:', Object.keys(this.textures.list));
+            return false;
         }
         
         // Обираємо текстуру по черзі (циклічно)

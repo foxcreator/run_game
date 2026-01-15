@@ -44,10 +44,25 @@ class Car extends Phaser.GameObjects.Image {
         this.setOrigin(0.5);
         this.setDepth(0);
         
-        // Розміри авто
-        const width = GAME_CONFIG.OBSTACLES.MOVING_BUS.WIDTH;
-        const height = GAME_CONFIG.OBSTACLES.MOVING_BUS.HEIGHT;
-        this.setDisplaySize(width, height);
+        // Розміри авто (використовуємо з конфігу або оригінальні розміри текстури)
+        const config = GAME_CONFIG.OBSTACLES.MOVING_BUS;
+        let displayWidth = config.DISPLAY_WIDTH;
+        let displayHeight = config.DISPLAY_HEIGHT;
+        
+        // Якщо розміри не вказані в конфігу, використовуємо оригінальні розміри текстури
+        if (displayWidth === null || displayHeight === null) {
+            if (textureKey && scene.textures.exists(textureKey)) {
+                const texture = scene.textures.get(textureKey);
+                displayWidth = displayWidth !== null ? displayWidth : texture.source[0].width;
+                displayHeight = displayHeight !== null ? displayHeight : texture.source[0].height;
+            } else {
+                // Fallback: використовуємо розміри з конфігу
+                displayWidth = config.WIDTH;
+                displayHeight = config.HEIGHT;
+            }
+        }
+        
+        this.setDisplaySize(displayWidth, displayHeight);
         
         this.speed = GAME_CONFIG.OBSTACLES.MOVING_BUS.SPEED;
         this.collisionCooldown = 0;
@@ -58,6 +73,7 @@ class Car extends Phaser.GameObjects.Image {
         this.stuckTimer = 0;
         this.stuckThreshold = 5;
         this.directionChangeCooldown = 0;
+        this.textureKey = textureKey; // Зберігаємо ключ текстури для визначення offset
         
         // Ініціалізація позиції на дорозі
         if (!this.isOnRoad(x, y) || this.hasCollision(x, y)) {
@@ -182,19 +198,27 @@ class Car extends Phaser.GameObjects.Image {
     updateRotation() {
         if (!this.currentDirection) return;
         
+        // Отримуємо базовий offset для поточної текстури
+        const rotationOffsets = GAME_CONFIG.OBSTACLES.MOVING_BUS.CAR_ROTATION_OFFSETS || {};
+        const textureOffset = rotationOffsets[this.textureKey] || 0;
+        
         let angle = 0;
         switch (this.currentDirection) {
             case 'up':
-                angle = -Math.PI / 2;
+                // Рух вгору: -90° + offset
+                angle = -Math.PI / 2 + textureOffset;
                 break;
             case 'down':
-                angle = Math.PI / 2;
+                // Рух вниз: 90° + offset
+                angle = Math.PI / 2 + textureOffset;
                 break;
             case 'left':
-                angle = Math.PI;
+                // Рух вліво: 180° + offset
+                angle = Math.PI + textureOffset;
                 break;
             case 'right':
-                angle = 0;
+                // Рух вправо: 0° + offset
+                angle = 0 + textureOffset;
                 break;
         }
         
