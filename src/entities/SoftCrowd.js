@@ -27,6 +27,11 @@ class SoftCrowd extends Obstacle {
             return;
         }
         
+        // Перевіряємо імунітет до SoftCrowd
+        if (player && player.hasImmunityToSoftCrowd && player.hasImmunityToSoftCrowd()) {
+            return; // Гравець має імунітет
+        }
+        
         // Застосовуємо дебаф швидкості
         if (player && !player.isFrozen) {
             // Встановлюємо множник швидкості на певний час

@@ -5,6 +5,11 @@ class BootScene extends Phaser.Scene {
     }
 
     preload() {
+        // Завантажуємо фонове зображення для меню
+        this.load.image('menu_background', './src/assets/menu/background.png');
+        // Завантажуємо фонове зображення для екрану закінчення гри
+        this.load.image('gameover_background', './src/assets/menu/gameover_background.jpeg');
+        
         // Завантажуємо текстуру кіоска
         // Спробуємо різні варіанти шляху
         this.load.image('kiosk', './src/assets/textures/kiosk.png');
@@ -50,6 +55,18 @@ class BootScene extends Phaser.Scene {
         this.load.image('sliding', './src/assets/textures/player/sliding.png');
         this.load.image('fall_1', './src/assets/textures/player/fall_1.png');
         this.load.image('fall_2', './src/assets/textures/player/fall_2.png');
+        
+        // Завантажуємо текстури монет різних номіналів
+        this.load.image('coin_10', './src/assets/textures/pickups/10_uah.png');
+        this.load.image('coin_20', './src/assets/textures/pickups/20_uah.png');
+        this.load.image('coin_50', './src/assets/textures/pickups/50_uah.png');
+        this.load.image('coin_100', './src/assets/textures/pickups/100_uah.png');
+        
+        // Завантажуємо текстуру обмінника
+        this.load.image('exchange', './src/assets/textures/exchange.png');
+        
+        // Завантажуємо текстуру калюж
+        this.load.image('lake', './src/assets/textures/lake.png');
         
         // Обробка помилок завантаження
         this.load.on('loaderror', (file) => {

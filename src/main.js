@@ -16,10 +16,18 @@ const config = {
     parent: 'game-container',
     backgroundColor: '#1a1a2e',
     scale: {
-        mode: Phaser.Scale.FIT,
+        mode: Phaser.Scale.WIDTH_CONTROLS_HEIGHT, // Ширина контролює висоту - гра завжди на всю ширину
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: GAME_WIDTH,
-        height: GAME_HEIGHT
+        height: GAME_HEIGHT,
+        min: {
+            width: GAME_WIDTH,
+            height: GAME_HEIGHT
+        },
+        max: {
+            width: GAME_WIDTH * 2,
+            height: GAME_HEIGHT * 2
+        }
     },
     physics: {
         default: 'arcade',
