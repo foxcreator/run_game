@@ -5,6 +5,9 @@ class BootScene extends Phaser.Scene {
     }
 
     preload() {
+        // Завантажуємо фонове зображення для меню
+        this.load.image('menu_background', './src/assets/menu/background.png');
+        
         // Завантажуємо текстуру кіоска
         // Спробуємо різні варіанти шляху
         this.load.image('kiosk', './src/assets/textures/kiosk.png');
