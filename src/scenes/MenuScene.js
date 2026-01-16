@@ -204,47 +204,65 @@ class MenuScene extends Phaser.Scene {
             .setDepth(100)
             .setInteractive();
 
-        // Вікно налаштувань
-        const settingsWidth = 500;
-        const settingsHeight = 400;
-        const settingsBox = this.add.rectangle(
-            width / 2, 
-            height / 2, 
+        // Вікно налаштувань - сірий прямокутник в стилі меню
+        const settingsWidth = 550;
+        const settingsHeight = 420;
+        const settingsBoxX = width / 2;
+        const settingsBoxY = height / 2;
+        
+        // Тінь вікна
+        const settingsShadow = this.add.rectangle(
+            settingsBoxX + 4, 
+            settingsBoxY + 4, 
             settingsWidth, 
             settingsHeight, 
-            0x2c3e50, 
+            0x000000, 
+            0.5
+        ).setDepth(101);
+
+        const settingsBox = this.add.rectangle(
+            settingsBoxX, 
+            settingsBoxY, 
+            settingsWidth, 
+            settingsHeight, 
+            0x808080, 
             0.95
         )
         .setDepth(101)
-        .setStrokeStyle(3, 0xffffff);
+        .setStrokeStyle(3, 0x606060);
 
         // Заголовок
-        const title = this.add.text(width / 2, height / 2 - 150, 'НАЛАШТУВАННЯ', {
-            fontSize: '36px',
-            fill: '#ffffff',
+        const title = this.add.text(settingsBoxX, settingsBoxY - 150, 'НАЛАШТУВАННЯ', {
+            fontSize: '42px',
+            fill: '#0057B7',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 3
+            stroke: '#FFD700',
+            strokeThickness: 6
         }).setOrigin(0.5).setDepth(102);
 
         // Тимчасовий текст (пізніше можна додати реальні налаштування)
-        const infoText = this.add.text(width / 2, height / 2, 'Налаштування в розробці\n\nТут будуть:\n• Гучність звуку\n• Гучність музики\n• Якість графіки\n• Управління', {
+        const infoText = this.add.text(settingsBoxX, settingsBoxY - 20, 'Налаштування в розробці\n\nТут будуть:\n• Гучність звуку\n• Гучність музики\n• Якість графіки\n• Управління', {
             fontSize: '20px',
-            fill: '#ffffff',
+            fill: '#FFFFFF',
             fontFamily: 'Arial, sans-serif',
-            align: 'center'
+            align: 'center',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2,
+            lineSpacing: 8
         }).setOrigin(0.5).setDepth(102);
 
         // Кнопка закриття
         const closeButton = this.createMenuButton(
-            width / 2,
-            height / 2 + 150,
-            200,
-            50,
+            settingsBoxX,
+            settingsBoxY + 150,
+            220,
+            55,
             'ЗАКРИТИ',
             () => {
                 overlay.destroy();
+                settingsShadow.destroy();
                 settingsBox.destroy();
                 title.destroy();
                 infoText.destroy();
@@ -260,6 +278,7 @@ class MenuScene extends Phaser.Scene {
         // Закриваємо при кліку на затемнений фон
         overlay.on('pointerdown', () => {
             overlay.destroy();
+            settingsShadow.destroy();
             settingsBox.destroy();
             title.destroy();
             infoText.destroy();
@@ -277,28 +296,41 @@ class MenuScene extends Phaser.Scene {
             .setDepth(100)
             .setInteractive();
 
-        // Вікно інформації
-        const aboutWidth = 600;
-        const aboutHeight = 450;
-        const aboutBox = this.add.rectangle(
-            width / 2, 
-            height / 2, 
+        // Вікно інформації - сірий прямокутник в стилі меню
+        const aboutWidth = 650;
+        const aboutHeight = 480;
+        const aboutBoxX = width / 2;
+        const aboutBoxY = height / 2;
+        
+        // Тінь вікна
+        const aboutShadow = this.add.rectangle(
+            aboutBoxX + 4, 
+            aboutBoxY + 4, 
             aboutWidth, 
             aboutHeight, 
-            0x2c3e50, 
+            0x000000, 
+            0.5
+        ).setDepth(101);
+
+        const aboutBox = this.add.rectangle(
+            aboutBoxX, 
+            aboutBoxY, 
+            aboutWidth, 
+            aboutHeight, 
+            0x808080, 
             0.95
         )
         .setDepth(101)
-        .setStrokeStyle(3, 0xffffff);
+        .setStrokeStyle(3, 0x606060);
 
         // Заголовок
-        const title = this.add.text(width / 2, height / 2 - 180, 'ПРО ГРУ', {
-            fontSize: '36px',
-            fill: '#ffffff',
+        const title = this.add.text(aboutBoxX, aboutBoxY - 180, 'ПРО ГРУ', {
+            fontSize: '42px',
+            fill: '#0057B7',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 3
+            stroke: '#FFD700',
+            strokeThickness: 6
         }).setOrigin(0.5).setDepth(102);
 
         // Текст інформації
@@ -316,24 +348,28 @@ Endless chase гра у стилі pixel art.
 
 Гра створена в розважальних цілях.`;
 
-        const infoText = this.add.text(width / 2, height / 2 - 20, aboutText, {
+        const infoText = this.add.text(aboutBoxX, aboutBoxY - 20, aboutText, {
             fontSize: '18px',
-            fill: '#ffffff',
+            fill: '#FFFFFF',
             fontFamily: 'Arial, sans-serif',
             align: 'center',
-            wordWrap: { width: aboutWidth - 60 },
-            lineSpacing: 8
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2,
+            wordWrap: { width: aboutWidth - 80 },
+            lineSpacing: 10
         }).setOrigin(0.5).setDepth(102);
 
         // Кнопка закриття
         const closeButton = this.createMenuButton(
-            width / 2,
-            height / 2 + 180,
-            200,
-            50,
+            aboutBoxX,
+            aboutBoxY + 180,
+            220,
+            55,
             'ЗАКРИТИ',
             () => {
                 overlay.destroy();
+                aboutShadow.destroy();
                 aboutBox.destroy();
                 title.destroy();
                 infoText.destroy();
@@ -349,6 +385,7 @@ Endless chase гра у стилі pixel art.
         // Закриваємо при кліку на затемнений фон
         overlay.on('pointerdown', () => {
             overlay.destroy();
+            aboutShadow.destroy();
             aboutBox.destroy();
             title.destroy();
             infoText.destroy();

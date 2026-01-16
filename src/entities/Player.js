@@ -76,8 +76,15 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         // Дебафи швидкості (для перешкод)
         this.speedDebuffs = []; // Масив активних дебафів { multiplier, duration }
         
+        // Бафи швидкості (для бонусів)
+        this.speedBuffs = []; // Масив активних бафів { multiplier, duration }
+        
         // Дебафи керованості (для калюж)
         this.controlDebuffs = []; // Масив активних дебафів { multiplier, duration }
+        
+        // Імунітет до SoftCrowd (для скутера)
+        this.immunityToSoftCrowd = false;
+        this.immunityToSoftCrowdTimer = 0;
         
         // Анімації та напрямок
         this.lastDirection = 'front'; // Останній напрямок руху (front, rear, left, right)
@@ -247,6 +254,12 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         
         // Оновлення дебафів керованості
         this.updateControlDebuffs(delta);
+        
+        // Оновлення бафів швидкості
+        this.updateSpeedBuffs(delta);
+        
+        // Оновлення імунітетів
+        this.updateImmunities(delta);
     }
     
     updateSpeedDebuffs(delta) {
@@ -260,25 +273,62 @@ class Player extends Phaser.Physics.Arcade.Sprite {
                 this.speedDebuffs.splice(i, 1);
             }
         }
-        
-        // Обчислюємо загальний множник швидкості
-        // Exhausted має пріоритет над дебафами
-        if (this.exhausted) {
-            // Exhausted встановлює свій множник, не змінюємо його
-            return;
-        }
-        
-        // Якщо є дебафи, застосовуємо найнижчий множник
-        if (this.speedDebuffs.length > 0) {
-            let minMultiplier = 1.0;
-            for (const debuff of this.speedDebuffs) {
-                minMultiplier = Math.min(minMultiplier, debuff.multiplier);
+    }
+    
+    updateSpeedBuffs(delta) {
+        // Оновлюємо всі активні бафи
+        for (let i = this.speedBuffs.length - 1; i >= 0; i--) {
+            const buff = this.speedBuffs[i];
+            buff.duration -= delta;
+            
+            if (buff.duration <= 0) {
+                // Баф закінчився - видаляємо
+                this.speedBuffs.splice(i, 1);
             }
-            this.speedMultiplier = minMultiplier;
-        } else {
-            // Якщо немає дебафів - повертаємо до 1.0
-            this.speedMultiplier = 1.0;
         }
+    }
+    
+    updateImmunities(delta) {
+        // Оновлюємо таймер імунітету до SoftCrowd
+        if (this.immunityToSoftCrowdTimer > 0) {
+            this.immunityToSoftCrowdTimer -= delta;
+            if (this.immunityToSoftCrowdTimer <= 0) {
+                this.immunityToSoftCrowd = false;
+                this.immunityToSoftCrowdTimer = 0;
+            }
+        }
+    }
+    
+    /**
+     * Обчислює загальний множник швидкості з урахуванням дебафів та бафів
+     */
+    calculateSpeedMultiplier() {
+        // Exhausted має пріоритет над усім
+        if (this.exhausted) {
+            return this.exhaustedSpeedMultiplier;
+        }
+        
+        let baseMultiplier = 1.0;
+        
+        // Застосовуємо дебафи (найнижчий множник)
+        if (this.speedDebuffs.length > 0) {
+            let minDebuff = 1.0;
+            for (const debuff of this.speedDebuffs) {
+                minDebuff = Math.min(minDebuff, debuff.multiplier);
+            }
+            baseMultiplier *= minDebuff;
+        }
+        
+        // Застосовуємо бафи (додаємо до базового)
+        if (this.speedBuffs.length > 0) {
+            let totalBuff = 0;
+            for (const buff of this.speedBuffs) {
+                totalBuff += buff.multiplier;
+            }
+            baseMultiplier += totalBuff;
+        }
+        
+        return baseMultiplier;
     }
     
     updateControlDebuffs(delta) {
@@ -404,6 +454,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         }
         
         // Обчислення швидкості
+        // Спочатку обчислюємо базовий множник з дебафів/бафів
+        this.speedMultiplier = this.calculateSpeedMultiplier();
+        
         let currentSpeedMultiplier = this.speedMultiplier;
         if (this.dashActive) {
             currentSpeedMultiplier *= this.dashSpeedMultiplier;
@@ -635,6 +688,35 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             multiplier: multiplier,
             duration: duration
         });
+    }
+    
+    /**
+     * Додає баф швидкості (для бонусів)
+     * @param {number} multiplier - Додатковий множник швидкості (додається до базового)
+     * @param {number} duration - Тривалість бафу (мс)
+     */
+    addSpeedBuff(multiplier, duration) {
+        this.speedBuffs.push({
+            multiplier: multiplier,
+            duration: duration
+        });
+    }
+    
+    /**
+     * Додає імунітет до SoftCrowd
+     * @param {number} duration - Тривалість імунітету (мс)
+     */
+    addImmunityToSoftCrowd(duration) {
+        this.immunityToSoftCrowd = true;
+        this.immunityToSoftCrowdTimer = duration;
+    }
+    
+    /**
+     * Перевіряє чи гравець має імунітет до SoftCrowd
+     * @returns {boolean}
+     */
+    hasImmunityToSoftCrowd() {
+        return this.immunityToSoftCrowd && this.immunityToSoftCrowdTimer > 0;
     }
     
     destroy() {

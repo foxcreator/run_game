@@ -16,6 +16,12 @@ class ChaserBlocker extends Chaser {
     moveTowardsTarget(delta) {
         if (!this.target || !this.target.body) return;
         
+        // Якщо втратив лок - використовуємо базову логіку
+        if (this.lostLock) {
+            super.moveTowardsTarget(delta);
+            return;
+        }
+        
         const dx = this.target.x - this.x;
         const dy = this.target.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
@@ -30,9 +36,10 @@ class ChaserBlocker extends Chaser {
             const direction = Math.random() > 0.5 ? 1 : -1;
             const finalAngle = perpendicularAngle + (direction * Math.PI / 4);
             
+            const speedMultiplier = this.getSpeedMultiplier();
             const backOffMultiplier = GAME_CONFIG.CHASERS.BLOCKER.BACK_OFF_SPEED_MULTIPLIER;
-            const velocityX = Math.cos(finalAngle) * this.speed * backOffMultiplier;
-            const velocityY = Math.sin(finalAngle) * this.speed * backOffMultiplier;
+            const velocityX = Math.cos(finalAngle) * this.speed * backOffMultiplier * speedMultiplier;
+            const velocityY = Math.sin(finalAngle) * this.speed * backOffMultiplier * speedMultiplier;
             this.setVelocity(velocityX, velocityY);
             return;
         }
@@ -63,14 +70,15 @@ class ChaserBlocker extends Chaser {
         }
         
         // Використовуємо pathfinding для обходу перешкод
+        const speedMultiplier = this.getSpeedMultiplier();
         if (this.pathfindingSystem) {
             const radius = GAME_CONFIG.CHASERS.COMMON.COLLISION_RADIUS;
             const direction = this.pathfindingSystem.getSteeringDirection(
                 this.x, this.y, targetX, targetY, radius
             );
             
-            const velocityX = direction.x * this.speed;
-            const velocityY = direction.y * this.speed;
+            const velocityX = direction.x * this.speed * speedMultiplier;
+            const velocityY = direction.y * this.speed * speedMultiplier;
             this.setVelocity(velocityX, velocityY);
         } else {
             // Якщо pathfinding не доступний - рухаємося напряму

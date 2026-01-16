@@ -1,10 +1,12 @@
 // GameScene - основна сцена гри
 import Player from '../entities/Player.js';
+// v2.0 - оновлення для дебагу moneyText
 import HUD from '../ui/HUD.js';
 import Minimap from '../ui/Minimap.js';
 import CaptureSystem from '../systems/CaptureSystem.js';
 import TilemapSystem from '../systems/TilemapSystem.js';
 import PathfindingSystem from '../systems/PathfindingSystem.js';
+import SaveSystem from '../systems/SaveSystem.js';
 import SoftCrowd from '../entities/SoftCrowd.js';
 import PuddleSlip from '../entities/PuddleSlip.js';
 import TapeGate from '../entities/TapeGate.js';
@@ -12,6 +14,11 @@ import Car from '../entities/Car.js';
 import PaperStack from '../entities/PaperStack.js';
 import ChaserBlocker from '../entities/ChaserBlocker.js';
 import ChaserSticker from '../entities/ChaserSticker.js';
+import Coin from '../entities/Coin.js';
+// EnergyDrink не потрібен - енергетик вже реалізований в кіосках
+// Scooter та Joke видалено - вони були незрозумілі гравцям
+import SmokeCloud from '../entities/bonuses/SmokeCloud.js';
+import Exchange from '../entities/Exchange.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
 
 class GameScene extends Phaser.Scene {
@@ -79,7 +86,38 @@ class GameScene extends Phaser.Scene {
         // Створюємо HUD (залишаємо на фіксованій позиції екрану)
         // HUD створюється після tilemap, щоб бути поверх кіосків
         this.hud = new HUD(this);
-        this.hud.create(this.player);
+        
+        try {
+            this.hud.create(this.player);
+        } catch (error) {
+            console.error('❌ GameScene.create() ПОМИЛКА при виклику hud.create():', error);
+        }
+        
+        // ЯКЩО moneyText не створено - створюємо його вручну
+        if (!this.hud.moneyText) {
+            const barX = 50;
+            const captureBarY = 50 + 40 + 40; // barY + dashBarY offset + captureBarY offset
+            const moneyY = captureBarY + 40;
+            
+            const moneyText = this.add.text(barX, moneyY, 'Зароблено: $0 | Банк: $0', {
+                fontSize: '18px',
+                fill: '#ffffff',
+                fontFamily: 'Arial, sans-serif',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0, 0.5)
+            .setScrollFactor(0)
+            .setDepth(202);
+            
+            // ВАЖЛИВО: присвоюємо moneyText до HUD
+            this.hud.moneyText = moneyText;
+            
+            // ВАЖЛИВО: переконаємося, що this.scene встановлено в HUD
+            if (!this.hud.scene) {
+                this.hud.scene = this;
+            }
+        }
+        
         this.hud.setCaptureSystem(this.captureSystem);
         
         // Створюємо міні-карту
@@ -99,13 +137,30 @@ class GameScene extends Phaser.Scene {
         // Масив перешкод
         this.obstacles = [];
         
-        // Масив пікапів (монети)
+        // Масив пікапів (монети та бонуси)
         this.pickups = [];
+        
+        // Масив обмінників
+        this.exchanges = [];
+        
+        // Система збереження
+        this.saveSystem = new SaveSystem();
+        // Зберігаємо початковий баланс банку для обчислення прибутку за гру
+        this.initialBankedMoney = this.saveSystem.getBankedMoney();
+        this.bankedMoney = this.initialBankedMoney;
+        
+        // Створюємо обмінники на карті (постійне розміщення)
+        this.spawnExchanges();
+        
+        // Додаємо обмінники до перешкод для колізій (після створення)
+        for (const exchange of this.exchanges) {
+            this.obstacles.push(exchange);
+        }
         
         // Створюємо перешкоди на карті
         this.spawnObstacles();
         
-        // Налаштовуємо колізії між гравцем та перешкодами
+        // Налаштовуємо колізії між гравцем та перешкодами (включає обмінники)
         this.setupObstacleCollisions();
         
         // Налаштовуємо колізії між автомобілями та ворогами
@@ -114,8 +169,21 @@ class GameScene extends Phaser.Scene {
         // Налаштовуємо колізії між гравцем та пікапами
         this.setupPickupCollisions();
         
+        // Налаштовуємо колізії між гравцем та обмінниками
+        this.setupExchangeCollisions();
+        
         // Гроші за забіг
         this.runMoney = 0;
+        
+        // Лічильник загальної кількості створених монет (для визначення номіналу)
+        this.totalCoinsSpawned = 0;
+        
+        // Таймер для процедурного спавну пікапів
+        this.pickupSpawnTimer = 0;
+        this.pickupSpawnInterval = 1000; // Перевірка кожну секунду
+        
+        // Спавн початкових пікапів (монети та бонуси)
+        this.spawnPickups();
         
         // Налаштовуємо колізії між гравцем та ворогами
         this.setupChaserCollisions();
@@ -123,16 +191,402 @@ class GameScene extends Phaser.Scene {
         // Таймер виживання
         this.timeSurvived = 0;
         this.score = 0;
+        
+        // Стан паузи
+        this.isPaused = false;
+        this.pauseMenu = null;
+        
+        // Налаштовуємо обробник ESC для паузи
+        this.setupPauseControls();
+    }
+    
+    setupPauseControls() {
+        // Створюємо об'єкт для клавіші ESC
+        this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+        
+        // Обробник натискання ESC
+        this.escKey.on('down', () => {
+            if (!this.isPaused && !this.captureSystem?.isMaxed()) {
+                // Ставимо на паузу
+                this.pauseGame();
+            } else if (this.isPaused) {
+                // Знімаємо з паузи
+                this.resumeGame();
+            }
+        });
+    }
+    
+    pauseGame() {
+        if (this.isPaused) return;
+        
+        this.isPaused = true;
+        this.physics.pause();
+        
+        // Створюємо меню паузи
+        this.createPauseMenu();
+    }
+    
+    resumeGame() {
+        if (!this.isPaused) return;
+        
+        this.isPaused = false;
+        this.physics.resume();
+        
+        // Видаляємо меню паузи та overlay
+        if (this.pauseMenu) {
+            // Видаляємо overlay якщо він є
+            if (this.pauseMenu.overlay) {
+                this.pauseMenu.overlay.destroy();
+            }
+            this.pauseMenu.destroy();
+            this.pauseMenu = null;
+        }
+    }
+    
+    createPauseMenu() {
+        if (this.pauseMenu) return; // Меню вже існує
+        
+        const { width, height } = this.cameras.main;
+        
+        // Напівпрозорий чорний фон (створюємо окремо, не в контейнері, щоб покривав весь екран)
+        const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7);
+        overlay.setDepth(1000);
+        overlay.setScrollFactor(0); // Не рухається з камерою
+        
+        // Створюємо контейнер для меню паузи
+        this.pauseMenu = this.add.container(width / 2, height / 2);
+        this.pauseMenu.setDepth(1001);
+        this.pauseMenu.setScrollFactor(0); // Не рухається з камерою
+        
+        // Зберігаємо overlay в контейнері для подальшого видалення
+        this.pauseMenu.overlay = overlay;
+        
+        // Заголовок "ПАУЗА"
+        const title = this.add.text(0, -180, 'ПАУЗА', {
+            fontSize: '72px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 4
+        }).setOrigin(0.5).setScrollFactor(0);
+        this.pauseMenu.add(title);
+        
+        // Блок меню
+        const menuBoxWidth = 400;
+        const menuBoxHeight = 280;
+        const menuBox = this.add.rectangle(0, 0, menuBoxWidth, menuBoxHeight, 0x808080, 0.9);
+        menuBox.setStrokeStyle(3, 0x606060);
+        menuBox.setScrollFactor(0);
+        this.pauseMenu.add(menuBox);
+        
+        // Кнопки
+        const buttonWidth = 300;
+        const buttonHeight = 60;
+        const buttonSpacing = 70;
+        const startY = -buttonSpacing;
+        
+        // Кнопка "ПРОДОВЖИТИ"
+        const resumeButton = this.createPauseButton(0, startY, buttonWidth, buttonHeight, 'ПРОДОВЖИТИ', () => {
+            this.resumeGame();
+        });
+        this.pauseMenu.add(resumeButton);
+        
+        // Кнопка "НАЛАШТУВАННЯ"
+        const settingsButton = this.createPauseButton(0, startY + buttonSpacing, buttonWidth, buttonHeight, 'НАЛАШТУВАННЯ', () => {
+            // Показуємо меню налаштувань
+            this.createPauseSettingsMenu();
+        });
+        this.pauseMenu.add(settingsButton);
+        
+        // Кнопка "ЗБЕРЕГТИ І ВИЙТИ"
+        const saveAndExitButton = this.createPauseButton(0, startY + buttonSpacing * 2, buttonWidth, buttonHeight, 'ЗБЕРЕГТИ І ВИЙТИ', () => {
+            // Гроші вже зберігаються через SaveSystem автоматично
+            // Просто виходимо в меню
+            this.resumeGame(); // Знімаємо паузу перед виходом
+            this.scene.start('MenuScene');
+        });
+        this.pauseMenu.add(saveAndExitButton);
+    }
+    
+    createPauseButton(x, y, width, height, text, callback) {
+        // Створюємо контейнер для кнопки (щоб всі елементи рухалися разом)
+        const buttonContainer = this.add.container(x, y);
+        buttonContainer.setScrollFactor(0);
+        
+        // Тінь
+        const shadow = this.add.rectangle(2, 2, width, height, 0x000000, 0.5);
+        shadow.setScrollFactor(0);
+        buttonContainer.add(shadow);
+        
+        // Кнопка
+        const button = this.add.rectangle(0, 0, width, height, 0x606060, 0.95)
+            .setInteractive({ useHandCursor: true })
+            .setStrokeStyle(2, 0x404040)
+            .setScrollFactor(0);
+        buttonContainer.add(button);
+        
+        // Текст
+        const buttonText = this.add.text(0, 0, text, {
+            fontSize: '24px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5).setScrollFactor(0);
+        buttonContainer.add(buttonText);
+        
+        // Hover ефект
+        button.on('pointerover', () => {
+            button.setFillStyle(0x707070);
+            buttonContainer.setScale(1.05);
+        });
+        
+        button.on('pointerout', () => {
+            button.setFillStyle(0x606060);
+            buttonContainer.setScale(1);
+        });
+        
+        button.on('pointerdown', () => {
+            if (callback) callback();
+        });
+        
+        // Зберігаємо посилання для можливого видалення
+        buttonContainer.button = button;
+        buttonContainer.shadow = shadow;
+        buttonContainer.text = buttonText;
+        
+        return buttonContainer;
+    }
+    
+    createPauseSettingsMenu() {
+        const { width, height } = this.cameras.main;
+        
+        // Приховуємо меню паузи (але НЕ видаляємо overlay!)
+        // Overlay створюється окремо, тому просто приховуємо контейнер меню
+        if (this.pauseMenu) {
+            this.pauseMenu.setVisible(false);
+        }
+        
+        // Створюємо меню налаштувань (схоже на MenuScene)
+        const settingsWidth = 550;
+        const settingsHeight = 420;
+        const settingsBoxX = width / 2;
+        const settingsBoxY = height / 2;
+        
+        // Тінь
+        const settingsShadow = this.add.rectangle(
+            settingsBoxX + 4, 
+            settingsBoxY + 4, 
+            settingsWidth, 
+            settingsHeight, 
+            0x000000, 
+            0.4
+        ).setScrollFactor(0).setDepth(1002);
+        
+        // Блок налаштувань
+        const settingsBox = this.add.rectangle(
+            settingsBoxX, 
+            settingsBoxY, 
+            settingsWidth, 
+            settingsHeight, 
+            0x808080, 
+            0.9
+        ).setStrokeStyle(3, 0x606060).setScrollFactor(0).setDepth(1002);
+        
+        // Заголовок
+        const title = this.add.text(settingsBoxX, settingsBoxY - 150, 'НАЛАШТУВАННЯ', {
+            fontSize: '48px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 4
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
+        
+        // Інформація про налаштування
+        const infoText = this.add.text(settingsBoxX, settingsBoxY - 20, 'Налаштування в розробці\n\nТут будуть:\n• Гучність звуку\n• Гучність музики\n• Якість графіки\n• Управління', {
+            fontSize: '22px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial, sans-serif',
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
+        
+        // Кнопка "НАЗАД"
+        const closeButton = this.createPauseButton(
+            settingsBoxX,
+            settingsBoxY + 150,
+            300,
+            60,
+            'НАЗАД',
+            () => {
+                // Закриваємо меню налаштувань
+                settingsShadow.destroy();
+                settingsBox.destroy();
+                title.destroy();
+                infoText.destroy();
+                if (closeButton) {
+                    closeButton.destroy();
+                }
+                // Показуємо меню паузи знову (overlay залишається видимим)
+                if (this.pauseMenu) {
+                    this.pauseMenu.setVisible(true);
+                }
+            }
+        );
+        closeButton.setScrollFactor(0);
+        closeButton.setDepth(1003);
+    }
+    
+    spawnExchanges() {
+        // Спавнимо обмінники на карті (постійне розміщення)
+        const exchangeCount = GAME_CONFIG.EXCHANGES.COUNT;
+        const safeRadius = 200; // Безпечний радіус навколо гравця
+        
+        let spawned = 0;
+        let attempts = 0;
+        const maxAttempts = exchangeCount * 50;
+        
+        while (spawned < exchangeCount && attempts < maxAttempts) {
+            attempts++;
+            
+            // Генеруємо випадкову позицію по всій карті
+            const x = Phaser.Math.Between(150, this.worldWidth - 150);
+            const y = Phaser.Math.Between(150, this.worldHeight - 150);
+            
+            // Перевіряємо чи позиція не близько до гравця
+            if (this.player) {
+                const distToPlayer = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
+                if (distToPlayer < safeRadius) {
+                    continue;
+                }
+            }
+            
+            // Перевіряємо чи позиція прохідна
+            if (!this.tilemap.isWalkable(x, y)) {
+                continue;
+            }
+            
+            // Перевіряємо ВСІ тайли, які покриває обмінник (не тільки кути!)
+            // Обмінник має розмір 60x60 пікселів, тайл - 32x32, тому обмінник покриває ~2x2 тайли
+            const exchangeWidth = 60;
+            const exchangeHeight = 60;
+            const halfWidth = exchangeWidth / 2;
+            const halfHeight = exchangeHeight / 2;
+            
+            // Визначаємо діапазон тайлів, які покриває обмінник
+            const minTileX = Math.floor((x - halfWidth) / this.tilemap.tileSize);
+            const maxTileX = Math.floor((x + halfWidth) / this.tilemap.tileSize);
+            const minTileY = Math.floor((y - halfHeight) / this.tilemap.tileSize);
+            const maxTileY = Math.floor((y + halfHeight) / this.tilemap.tileSize);
+            
+            // Перевіряємо всі тайли в діапазоні
+            let allTilesValid = true;
+            for (let tileY = minTileY; tileY <= maxTileY; tileY++) {
+                for (let tileX = minTileX; tileX <= maxTileX; tileX++) {
+                    // Перевіряємо чи координати в межах карти
+                    if (tileX < 0 || tileX >= this.tilemap.mapWidth || 
+                        tileY < 0 || tileY >= this.tilemap.mapHeight) {
+                        allTilesValid = false;
+                        break;
+                    }
+                    
+                    // Отримуємо тип тайла з tileTypeMap
+                    let tileType = null;
+                    if (this.tilemap.tileTypeMap && 
+                        this.tilemap.tileTypeMap[tileY] && 
+                        this.tilemap.tileTypeMap[tileY][tileX] !== undefined) {
+                        tileType = this.tilemap.tileTypeMap[tileY][tileX];
+                    } else {
+                        allTilesValid = false;
+                        break;
+                    }
+                    
+                    // Дозволяємо тільки тротуари (SIDEWALK = 1, жовтий) та траву (YARD = 2, зелений)
+                    // Виключаємо дороги (ROAD = 0, сірий), будівлі, кіоски та огорожі
+                    if (tileType !== this.tilemap.TILE_TYPES.SIDEWALK && 
+                        tileType !== this.tilemap.TILE_TYPES.YARD) {
+                        allTilesValid = false;
+                        break; // Якщо хоча б один тайл на дорозі - пропускаємо
+                    }
+                }
+                if (!allTilesValid) break;
+            }
+            
+            if (!allTilesValid) {
+                continue; // Не спавнимо якщо хоча б один тайл на дорозі або будівлі
+            }
+            
+            // Перевіряємо чи немає обмінників поруч
+            let tooClose = false;
+            for (const exchange of this.exchanges) {
+                const distance = Phaser.Math.Distance.Between(x, y, exchange.x, exchange.y);
+                const minDistance = 300; // Мінімальна відстань між обмінниками
+                if (distance < minDistance) {
+                    tooClose = true;
+                    break;
+                }
+            }
+            
+            if (tooClose) {
+                continue;
+            }
+            
+            // Перевіряємо чи немає перешкод поруч (включаючи кіоски)
+            for (const obstacle of this.obstacles) {
+                const distance = Phaser.Math.Distance.Between(x, y, obstacle.x, obstacle.y);
+                if (distance < 100) {
+                    tooClose = true;
+                    break;
+                }
+            }
+            
+            // Перевіряємо чи немає кіосків поруч
+            if (this.tilemap.activeKiosks) {
+                for (const kiosk of this.tilemap.activeKiosks) {
+                    const distance = Phaser.Math.Distance.Between(x, y, kiosk.worldX, kiosk.worldY);
+                    if (distance < 100) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Перевіряємо чи немає пікапів поруч
+            for (const pickup of this.pickups) {
+                if (pickup && pickup.active) {
+                    const distance = Phaser.Math.Distance.Between(x, y, pickup.x, pickup.y);
+                    if (distance < 80) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (tooClose) {
+                continue;
+            }
+            
+            // Створюємо обмінник
+            try {
+                const exchange = new Exchange(this, x, y);
+                this.exchanges.push(exchange);
+                spawned++;
+            } catch (error) {
+                console.error('Помилка створення обмінника:', error);
+            }
+        }
     }
     
     spawnObstacles() {
         // Спавнимо різні типи перешкод на карті
         const obstacleCounts = {
-            'SoftCrowd': 8,      // Черги людей
+            'SoftCrowd': 0,      // Черги людей видалено - червоні блоки не потрібні
             'PuddleSlip': 0,    // Калюжі генеруються окремо
-            'TapeGate': 6,       // Стрічки/шлагбауми
-            'Car': 0,      // Автомобілі генеруються окремо
-            'PaperStack': 5      // Пачки паперів
+            'TapeGate': 0,       // Стрічки/шлагбауми видалено - рожеві блоки не потрібні
+            'Car': 0      // Автомобілі генеруються окремо
+            // PaperStack видалено - білі блоки не потрібні
         };
         
         // Безпечний радіус навколо гравця
@@ -191,10 +645,7 @@ class GameScene extends Phaser.Scene {
                         case 'TapeGate':
                             obstacle = new TapeGate(this, x, y);
                             break;
-                        // Car генерується окремо
-                        case 'PaperStack':
-                            obstacle = new PaperStack(this, x, y);
-                            break;
+                        // PaperStack видалено - білі блоки не потрібні
                         default:
                             continue;
                     }
@@ -419,15 +870,46 @@ class GameScene extends Phaser.Scene {
         // Це буде викликатися при оновленні пікапів
     }
     
+    setupExchangeCollisions() {
+        // Налаштовуємо колізії між гравцем та обмінниками
+        // Використовуємо collide (не overlap) щоб блокувати рух гравця
+        if (this.exchanges && this.exchanges.length > 0) {
+            this.physics.add.collider(
+                this.player,
+                this.exchanges,
+                null, // Без callback - просто блокуємо рух
+                null,
+                this
+            );
+        }
+    }
+    
     handlePickupCollision(player, pickup) {
-        if (!pickup.active) return;
+        if (!pickup || !pickup.active || pickup.collected) return;
         
-        // Якщо це монета (перевіряємо через type або метод)
-        if (pickup.value !== undefined && pickup.collect) {
+        // Позначаємо як зібраний щоб не збирати двічі
+        pickup.collected = true;
+        
+        // Якщо це монета
+        if (pickup instanceof Coin && pickup.value !== undefined) {
             // Додаємо гроші
             this.runMoney += pickup.value;
             
             // Видаляємо монету
+            pickup.collect();
+            
+            // Видаляємо з масиву
+            const index = this.pickups.indexOf(pickup);
+            if (index > -1) {
+                this.pickups.splice(index, 1);
+            }
+        }
+        // Якщо це бонус
+        else if (pickup.applyEffect) {
+            // Застосовуємо ефект бонусу
+            pickup.applyEffect(player, this);
+            
+            // Видаляємо бонус
             pickup.collect();
             
             // Видаляємо з масиву
@@ -692,6 +1174,11 @@ class GameScene extends Phaser.Scene {
     }
     
     update(time, delta) {
+        // Якщо гра на паузі - не оновлюємо нічого
+        if (this.isPaused) {
+            return;
+        }
+        
         // Оновлення гравця
         if (this.player) {
             this.player.update(time, delta);
@@ -720,22 +1207,61 @@ class GameScene extends Phaser.Scene {
             }
         }
         
-        // Оновлення пікапів (монет)
+        // Оновлення пікапів (монет) з магнітним ефектом
         for (const pickup of this.pickups) {
             if (pickup.active && pickup.update) {
-                pickup.update(delta);
+                pickup.update(delta, this.player);
             }
         }
         
-        // Перевірка колізій з пікапами
-        if (this.pickups.length > 0) {
-            this.physics.overlap(
-                this.player,
-                this.pickups,
-                this.handlePickupCollision,
-                null,
-                this
-            );
+        // Процедурний спавн пікапів (підтримка кількості)
+        this.pickupSpawnTimer += delta;
+        if (this.pickupSpawnTimer >= this.pickupSpawnInterval) {
+            this.pickupSpawnTimer = 0;
+            this.maintainPickups();
+        }
+        
+        // Cleanup пікапів позаду гравця
+        this.cleanupPickups();
+        
+        // Перевірка колізій з пікапами (використовуємо відстань для надійності)
+        if (this.pickups.length > 0 && this.player) {
+            const pickupRadius = 40; // Радіус збору (більший ніж hitbox)
+            
+            for (let i = this.pickups.length - 1; i >= 0; i--) {
+                const pickup = this.pickups[i];
+                if (!pickup || !pickup.active || pickup.collected) continue;
+                
+                // Перевіряємо відстань до гравця
+                const dx = this.player.x - pickup.x;
+                const dy = this.player.y - pickup.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // Якщо гравець достатньо близько - збираємо пікап
+                if (distance < pickupRadius) {
+                    this.handlePickupCollision(this.player, pickup);
+                }
+            }
+        }
+        
+        // Перевірка колізій з обмінниками
+        // Збільшуємо радіус для зручності підходу з будь-якої сторони
+        if (this.exchanges.length > 0 && this.player && !this.player.isFrozen) {
+            const exchangeRadius = 70; // Збільшений радіус взаємодії (було 50)
+            
+            for (const exchange of this.exchanges) {
+                if (!exchange || !exchange.active) continue;
+                
+                // Перевіряємо відстань до гравця (з усіх сторін)
+                const dx = this.player.x - exchange.x;
+                const dy = this.player.y - exchange.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // Якщо гравець достатньо близько - обмінюємо гроші
+                if (distance < exchangeRadius) {
+                    exchange.exchange(this.player, this);
+                }
+            }
         }
         
         // Оновлення ворогів
@@ -761,6 +1287,12 @@ class GameScene extends Phaser.Scene {
             this.children.bringToTop(this.hud.captureBarBg);
             this.children.bringToTop(this.hud.captureBar);
             this.children.bringToTop(this.hud.captureText);
+            if (this.hud.moneyText) {
+                this.children.bringToTop(this.hud.moneyText);
+            }
+            if (this.hud.bonusIconsContainer) {
+                this.children.bringToTop(this.hud.bonusIconsContainer);
+            }
         }
         
         // Оновлення міні-карти
@@ -1150,11 +1682,286 @@ class GameScene extends Phaser.Scene {
         }
     }
     
+    spawnPickups() {
+        const config = GAME_CONFIG.PICKUPS;
+        
+        // Спавн монет (до максимуму з конфігу)
+        const coinCount = config.COINS.MAX_COUNT_ON_MAP;
+        for (let i = 0; i < coinCount; i++) {
+            this.spawnCoin();
+        }
+        
+        // Спавн бонусів (до максимуму з конфігу)
+        const bonusCount = config.BONUSES.MAX_COUNT_ON_MAP;
+        for (let i = 0; i < bonusCount; i++) {
+            // Шанс спавну бонусу
+            if (Math.random() < config.BONUSES.SPAWN_CHANCE) {
+                this.spawnBonus();
+            }
+        }
+    }
+    
+    spawnCoin() {
+        let attempts = 0;
+        const maxAttempts = 100;
+        
+        while (attempts < maxAttempts) {
+            attempts++;
+            
+            // Генеруємо випадкову позицію по всій карті (не тільки навколо гравця)
+            const x = Phaser.Math.Between(100, this.worldWidth - 100);
+            const y = Phaser.Math.Between(100, this.worldHeight - 100);
+            
+            // Перевіряємо чи позиція прохідна
+            if (!this.tilemap.isWalkable(x, y)) {
+                continue;
+            }
+            
+            // Перевіряємо чи тайл НЕ є будівлею (пікапи не можуть бути в будівлях)
+            const tileType = this.tilemap.getTileType(x, y);
+            if (tileType === this.tilemap.TILE_TYPES.BUILDING) {
+                continue; // Не спавнимо в будівлях
+            }
+            
+            // Перевіряємо чи не дуже близько до інших пікапів (щоб не спавнити дуже близько)
+            let tooClose = false;
+            for (const pickup of this.pickups) {
+                if (pickup && pickup.active) {
+                    const distance = Phaser.Math.Distance.Between(x, y, pickup.x, pickup.y);
+                    if (distance < 50) { // Мінімальна відстань між пікапами
+                        tooClose = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Перевіряємо чи не дуже близько до обмінників
+            for (const exchange of this.exchanges) {
+                if (exchange && exchange.active) {
+                    const distance = Phaser.Math.Distance.Between(x, y, exchange.x, exchange.y);
+                    if (distance < 80) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Перевіряємо чи не дуже близько до кіосків
+            if (this.tilemap.activeKiosks) {
+                for (const kiosk of this.tilemap.activeKiosks) {
+                    const distance = Phaser.Math.Distance.Between(x, y, kiosk.worldX, kiosk.worldY);
+                    if (distance < 80) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (tooClose) {
+                continue;
+            }
+            
+            // Визначаємо номінал монети згідно співвідношення
+            const denomination = this.selectCoinDenomination();
+            
+            // Створюємо монету з визначеним номіналом
+            const coin = new Coin(this, x, y, denomination);
+            this.pickups.push(coin);
+            
+            // Збільшуємо лічильник загальної кількості монет
+            this.totalCoinsSpawned++;
+            return;
+        }
+    }
+    
+    /**
+     * Визначає номінал монети згідно співвідношення "один на N"
+     * @returns {Object} Об'єкт з value, color та texture
+     */
+    selectCoinDenomination() {
+        const denominations = GAME_CONFIG.PICKUPS.COINS.DENOMINATIONS;
+        
+        // Знаходимо базовий номінал (10 грн)
+        const baseDenomination = denominations.find(d => d.value === 10);
+        
+        // Перевіряємо чи потрібно замінити на більший номінал
+        // Перевіряємо від найбільшого до найменшого (100 -> 50 -> 20)
+        const higherDenominations = denominations
+            .filter(d => d.value > 10)
+            .sort((a, b) => b.value - a.value); // Від більшого до меншого
+        
+        for (const denom of higherDenominations) {
+            // Якщо загальна кількість монет ділиться націло на ratio - спавнимо цей номінал
+            if (this.totalCoinsSpawned > 0 && this.totalCoinsSpawned % denom.ratio === 0) {
+                return denom;
+            }
+        }
+        
+        // Інакше повертаємо базовий номінал (10 грн)
+        return baseDenomination;
+    }
+    
+    spawnBonus() {
+        let attempts = 0;
+        const maxAttempts = 50;
+        
+        // Зони спавну згідно MVP 8.2
+        const safeRadius = 90; // Не спавнити ближче
+        const spawnRingMin = 220; // Мінімальна відстань від гравця
+        const spawnRingMax = 520; // Максимальна відстань від гравця
+        
+        while (attempts < maxAttempts) {
+            attempts++;
+            
+            // Генеруємо випадкову позицію в кільці навколо гравця
+            const angle = Math.random() * Math.PI * 2;
+            const distance = Phaser.Math.Between(spawnRingMin, spawnRingMax);
+            
+            const x = this.player.x + Math.cos(angle) * distance;
+            const y = this.player.y + Math.sin(angle) * distance;
+            
+            // Перевіряємо чи в межах світу
+            if (x < 50 || x > this.worldWidth - 50 || y < 50 || y > this.worldHeight - 50) {
+                continue;
+            }
+            
+            // Перевіряємо чи позиція прохідна
+            if (!this.tilemap.isWalkable(x, y)) {
+                continue;
+            }
+            
+            // Перевіряємо чи тайл НЕ є будівлею (бонуси не можуть бути в будівлях)
+            const tileType = this.tilemap.getTileType(x, y);
+            if (tileType === this.tilemap.TILE_TYPES.BUILDING) {
+                continue; // Не спавнимо в будівлях
+            }
+            
+            // Перевіряємо чи не дуже близько до гравця (додаткова перевірка)
+            const distanceToPlayer = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
+            if (distanceToPlayer < safeRadius) {
+                continue;
+            }
+            
+            // Вибираємо випадковий бонус (Scooter та Joke видалено, залишається тільки SmokeCloud)
+            const bonusTypes = [SmokeCloud];
+            const BonusClass = bonusTypes[Math.floor(Math.random() * bonusTypes.length)];
+            
+            // Створюємо бонус
+            const bonus = new BonusClass(this, x, y);
+            this.pickups.push(bonus);
+            return;
+        }
+    }
+    
+    /**
+     * Підтримує кількість пікапів на карті (процедурний спавн)
+     * Монети та бонуси спавняться по всій карті до максимуму
+     */
+    maintainPickups() {
+        if (!this.player || !this.tilemap) return;
+        
+        const config = GAME_CONFIG.PICKUPS;
+        
+        // Підраховуємо активні монети та бонуси
+        const activeCoins = this.pickups.filter(p => p instanceof Coin && p.active);
+        const activeBonuses = this.pickups.filter(p => 
+            !(p instanceof Coin) && p.active && p.applyEffect
+        );
+        
+        // Підтримуємо монети (максимум з конфігу)
+        const maxCoins = config.COINS.MAX_COUNT_ON_MAP;
+        
+        if (activeCoins.length < maxCoins) {
+            // Доспавнюємо монети до максимуму
+            const needed = maxCoins - activeCoins.length;
+            for (let i = 0; i < needed; i++) {
+                this.spawnCoin();
+            }
+        }
+        
+        // Підтримуємо бонуси (максимум з конфігу)
+        const maxBonuses = config.BONUSES.MAX_COUNT_ON_MAP;
+        
+        if (activeBonuses.length < maxBonuses) {
+            // Доспавнюємо бонуси до максимуму
+            const needed = maxBonuses - activeBonuses.length;
+            for (let i = 0; i < needed; i++) {
+                // Шанс спавну бонусу
+                if (Math.random() < config.BONUSES.SPAWN_CHANCE) {
+                    this.spawnBonus();
+                }
+            }
+        }
+    }
+    
+    /**
+     * Видаляє пікапи які далеко позаду гравця (cleanup для оптимізації)
+     */
+    cleanupPickups() {
+        if (!this.player) return;
+        
+        const cleanupDistance = 800; // Відстань позаду гравця для видалення
+        const playerX = this.player.x;
+        const playerY = this.player.y;
+        
+        // Визначаємо напрямок руху гравця (приблизно)
+        const velocityX = this.player.body ? this.player.body.velocity.x : 0;
+        const velocityY = this.player.body ? this.player.body.velocity.y : 0;
+        
+        // Якщо гравець не рухається - не видаляємо
+        if (Math.abs(velocityX) < 10 && Math.abs(velocityY) < 10) {
+            return;
+        }
+        
+        // Нормалізуємо напрямок руху
+        const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+        if (speed < 10) return;
+        
+        const dirX = velocityX / speed;
+        const dirY = velocityY / speed;
+        
+        // Видаляємо пікапи позаду гравця
+        for (let i = this.pickups.length - 1; i >= 0; i--) {
+            const pickup = this.pickups[i];
+            if (!pickup || !pickup.active) {
+                this.pickups.splice(i, 1);
+                continue;
+            }
+            
+            // Вектор від гравця до пікапа
+            const dx = pickup.x - playerX;
+            const dy = pickup.y - playerY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Якщо пікап далеко
+            if (distance > cleanupDistance) {
+                // Перевіряємо чи він позаду гравця (скалярний добуток < 0)
+                const dotProduct = dx * dirX + dy * dirY;
+                
+                if (dotProduct < 0) {
+                    // Пікап позаду - видаляємо
+                    if (pickup.body) {
+                        pickup.body.destroy();
+                    }
+                    pickup.destroy();
+                    this.pickups.splice(i, 1);
+                }
+            }
+        }
+    }
+    
     handleGameOver() {
+        // runMoney НЕ додається в банк (гроші згорають)
+        // Обміняні гроші вже додані через обмінники
+        
+        // Отримуємо поточний баланс банку та обчислюємо скільки додали за гру
+        const currentBankedMoney = this.saveSystem.getBankedMoney();
+        const moneyAddedThisGame = currentBankedMoney - (this.initialBankedMoney || 0);
+        
         // Перехід до ResultScene з даними
         this.scene.start('ResultScene', {
-            score: this.score,
-            moneyEarned: this.runMoney || 0,
+            currentBankedMoney: currentBankedMoney,
+            moneyAddedThisGame: moneyAddedThisGame,
             timeSurvived: this.timeSurvived
         });
     }

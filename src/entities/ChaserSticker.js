@@ -21,6 +21,12 @@ class ChaserSticker extends Chaser {
     moveTowardsTarget(delta) {
         if (!this.target) return;
         
+        // Якщо втратив лок - використовуємо базову логіку
+        if (this.lostLock) {
+            super.moveTowardsTarget(delta);
+            return;
+        }
+        
         // Оновлюємо cooldown
         if (this.hitCooldown > 0) {
             this.hitCooldown -= delta;
@@ -37,9 +43,10 @@ class ChaserSticker extends Chaser {
             
             if (distance > 0) {
                 // Рухаємося від гравця
+                const speedMultiplier = this.getSpeedMultiplier();
                 const retreatMultiplier = GAME_CONFIG.CHASERS.STICKER.RETREAT_SPEED_MULTIPLIER;
-                const velocityX = -(dx / distance) * this.speed * retreatMultiplier;
-                const velocityY = -(dy / distance) * this.speed * retreatMultiplier;
+                const velocityX = -(dx / distance) * this.speed * retreatMultiplier * speedMultiplier;
+                const velocityY = -(dy / distance) * this.speed * retreatMultiplier * speedMultiplier;
                 this.setVelocity(velocityX, velocityY);
             }
             return;
@@ -50,14 +57,15 @@ class ChaserSticker extends Chaser {
         const targetY = this.target.y;
         
         // Використовуємо pathfinding для обходу перешкод
+        const speedMultiplier = this.getSpeedMultiplier();
         if (this.pathfindingSystem) {
             const radius = GAME_CONFIG.CHASERS.COMMON.COLLISION_RADIUS;
             const direction = this.pathfindingSystem.getSteeringDirection(
                 this.x, this.y, targetX, targetY, radius
             );
             
-            const velocityX = direction.x * this.speed;
-            const velocityY = direction.y * this.speed;
+            const velocityX = direction.x * this.speed * speedMultiplier;
+            const velocityY = direction.y * this.speed * speedMultiplier;
             this.setVelocity(velocityX, velocityY);
         } else {
             // Якщо pathfinding не доступний - рухаємося напряму
@@ -66,8 +74,8 @@ class ChaserSticker extends Chaser {
             const distance = Math.sqrt(dx * dx + dy * dy);
             
             if (distance > 0) {
-                const velocityX = (dx / distance) * this.speed;
-                const velocityY = (dy / distance) * this.speed;
+                const velocityX = (dx / distance) * this.speed * speedMultiplier;
+                const velocityY = (dy / distance) * this.speed * speedMultiplier;
                 this.setVelocity(velocityX, velocityY);
             }
         }

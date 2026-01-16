@@ -131,10 +131,63 @@ class SpriteManager {
         this.PICKUP_SPRITES = {
             COIN: {
                 type: 'color',
-                value: 0xffd700, // Колір (золотий)
+                value: 0xffd700, // Колір (золотий) - базовий, для різних номіналів використовується color з конфігу
                 width: 16,
                 height: 16,
                 shape: 'rectangle' // 'rectangle' або 'circle'
+            },
+            // Монети різних номіналів (використовують текстури)
+            COIN_10: {
+                type: 'texture',
+                value: 'coin_10', // Текстура 10 грн
+                width: 32,
+                height: 32
+            },
+            COIN_20: {
+                type: 'texture',
+                value: 'coin_20', // Текстура 20 грн
+                width: 40,
+                height: 40
+            },
+            COIN_50: {
+                type: 'texture',
+                value: 'coin_50', // Текстура 50 грн
+                width: 48,
+                height: 48
+            },
+            COIN_100: {
+                type: 'texture',
+                value: 'coin_100', // Текстура 100 грн
+                width: 56,
+                height: 56
+            },
+            ENERGY: {
+                type: 'color',
+                value: 0x00ff00, // Зелений (енергетик)
+                width: 20,
+                height: 20,
+                shape: 'circle'
+            },
+            SCOOTER: {
+                type: 'color',
+                value: 0xff00ff, // Пурпурний (скутер)
+                width: 20,
+                height: 20,
+                shape: 'rectangle'
+            },
+            JOKE: {
+                type: 'color',
+                value: 0xffff00, // Жовтий (жарт)
+                width: 20,
+                height: 20,
+                shape: 'circle'
+            },
+            SMOKE: {
+                type: 'color',
+                value: 0x808080, // Сірий (димова хмарка)
+                width: 20,
+                height: 20,
+                shape: 'circle'
             }
         };
     }

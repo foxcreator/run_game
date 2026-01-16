@@ -1,4 +1,5 @@
 // HUD - інтерфейс користувача
+// Версія без логів - очищено всі console.log
 class HUD {
     constructor(scene) {
         this.scene = scene;
@@ -13,100 +14,131 @@ class HUD {
         this.captureBar = null;
         this.captureBarBg = null;
         this.captureText = null;
+        this.moneyText = null;
+        this.moneyTextBg = null;
+        this.bonusIcons = []; // Масив іконок активних бонусів
     }
     
     create(player) {
-        this.player = player;
-        const { width, height } = this.scene.cameras.main;
-        
-        // HUD має бути на фіксованій позиції екрану (не слідує за камерою)
-        // Бар стаміни
-        const barX = 50;
-        const barY = 50;
-        const barWidth = 300;
-        const barHeight = 25;
-        
-        // Фон бару стаміни (фіксована позиція на екрані)
-        this.staminaBarBg = this.scene.add.rectangle(barX, barY, barWidth, barHeight, 0x2c3e50, 0.8)
-            .setOrigin(0, 0.5)
-            .setStrokeStyle(2, 0xffffff, 0.5)
-            .setScrollFactor(0) // Не слідує за камерою
-            .setDepth(200); // HUD поверх всього
-        
-        // Бар стаміни
-        this.staminaBar = this.scene.add.rectangle(barX, barY, barWidth, barHeight, 0x3498db, 1)
-            .setOrigin(0, 0.5)
+        try {
+            if (!this.scene) {
+                console.error('❌ HUD.create() this.scene не існує!');
+                return;
+            }
+            
+            this.player = player;
+            const { width, height } = this.scene.cameras.main;
+            
+            // HUD має бути на фіксованій позиції екрану (не слідує за камерою)
+            // Бар стаміни
+            const barX = 50;
+            const barY = 50;
+            const barWidth = 300;
+            const barHeight = 25;
+            
+            // Фон бару стаміни (фіксована позиція на екрані)
+            this.staminaBarBg = this.scene.add.rectangle(barX, barY, barWidth, barHeight, 0x2c3e50, 0.8)
+                .setOrigin(0, 0.5)
+                .setStrokeStyle(2, 0xffffff, 0.5)
+                .setScrollFactor(0) // Не слідує за камерою
+                .setDepth(200); // HUD поверх всього
+            
+            // Бар стаміни
+            this.staminaBar = this.scene.add.rectangle(barX, barY, barWidth, barHeight, 0x3498db, 1)
+                .setOrigin(0, 0.5)
+                .setScrollFactor(0)
+                .setDepth(201);
+            
+            // Текст стаміни
+            this.staminaText = this.scene.add.text(barX + barWidth + 20, barY, '100/100', {
+                fontSize: '18px',
+                fill: '#ffffff',
+                fontFamily: 'Arial, sans-serif',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0, 0.5)
             .setScrollFactor(0)
-            .setDepth(201);
-        
-        // Текст стаміни
-        this.staminaText = this.scene.add.text(barX + barWidth + 20, barY, '100/100', {
-            fontSize: '18px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif',
-            stroke: '#000000',
-            strokeThickness: 2
-        }).setOrigin(0, 0.5)
-        .setScrollFactor(0)
-        .setDepth(202);
-        
-        // Dash cooldown бар
-        const dashBarY = barY + 40;
-        const dashBarWidth = 150;
-        const dashBarHeight = 15;
-        
-        // Фон dash cooldown
-        this.dashCooldownBg = this.scene.add.rectangle(barX, dashBarY, dashBarWidth, dashBarHeight, 0x2c3e50, 0.8)
-            .setOrigin(0, 0.5)
-            .setStrokeStyle(2, 0xffffff, 0.5)
+            .setDepth(202);
+            
+            // Dash cooldown бар
+            const dashBarY = barY + 40;
+            const dashBarWidth = 150;
+            const dashBarHeight = 15;
+            
+            // Фон dash cooldown
+            this.dashCooldownBg = this.scene.add.rectangle(barX, dashBarY, dashBarWidth, dashBarHeight, 0x2c3e50, 0.8)
+                .setOrigin(0, 0.5)
+                .setStrokeStyle(2, 0xffffff, 0.5)
+                .setScrollFactor(0)
+                .setDepth(200);
+            
+            // Dash cooldown бар
+            this.dashCooldownBar = this.scene.add.rectangle(barX, dashBarY, dashBarWidth, dashBarHeight, 0xf39c12, 1)
+                .setOrigin(0, 0.5)
+                .setScrollFactor(0)
+                .setDepth(201);
+            
+            // Текст dash
+            this.dashText = this.scene.add.text(barX, dashBarY - 25, 'DASH', {
+                fontSize: '14px',
+                fill: '#ffffff',
+                fontFamily: 'Arial, sans-serif',
+                stroke: '#000000',
+                strokeThickness: 1
+            }).setOrigin(0, 0.5)
             .setScrollFactor(0)
-            .setDepth(200);
-        
-        // Dash cooldown бар
-        this.dashCooldownBar = this.scene.add.rectangle(barX, dashBarY, dashBarWidth, dashBarHeight, 0xf39c12, 1)
-            .setOrigin(0, 0.5)
+            .setDepth(202);
+            
+            // Capture bar
+            const captureBarY = dashBarY + 40;
+            const captureBarWidth = 300;
+            const captureBarHeight = 25;
+            
+            // Фон capture bar
+            this.captureBarBg = this.scene.add.rectangle(barX, captureBarY, captureBarWidth, captureBarHeight, 0x2c3e50, 0.8)
+                .setOrigin(0, 0.5)
+                .setStrokeStyle(2, 0xffffff, 0.5)
+                .setScrollFactor(0)
+                .setDepth(200);
+            
+            // Capture bar
+            this.captureBar = this.scene.add.rectangle(barX, captureBarY, captureBarWidth, captureBarHeight, 0xe74c3c, 1)
+                .setOrigin(0, 0.5)
+                .setScrollFactor(0)
+                .setDepth(201);
+            
+            // Текст capture
+            this.captureText = this.scene.add.text(barX + captureBarWidth + 20, captureBarY, 'CAPTURE 0/100', {
+                fontSize: '18px',
+                fill: '#ffffff',
+                fontFamily: 'Arial, sans-serif',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0, 0.5)
             .setScrollFactor(0)
-            .setDepth(201);
-        
-        // Текст dash
-        this.dashText = this.scene.add.text(barX, dashBarY - 25, 'DASH', {
-            fontSize: '14px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif',
-            stroke: '#000000',
-            strokeThickness: 1
-        }).setOrigin(0, 0.5)
-        .setScrollFactor(0)
-        .setDepth(202);
-        
-        // Capture bar
-        const captureBarY = dashBarY + 40;
-        const captureBarWidth = 300;
-        const captureBarHeight = 25;
-        
-        // Фон capture bar
-        this.captureBarBg = this.scene.add.rectangle(barX, captureBarY, captureBarWidth, captureBarHeight, 0x2c3e50, 0.8)
-            .setOrigin(0, 0.5)
-            .setStrokeStyle(2, 0xffffff, 0.5)
+            .setDepth(202);
+            
+            // Гроші (під capture, точно так само як captureText)
+            const moneyY = captureBarY + 40;
+            
+            this.moneyText = this.scene.add.text(barX, moneyY, 'Зароблено: $0 | Банк: $0', {
+                fontSize: '18px',
+                fill: '#ffffff',
+                fontFamily: 'Arial, sans-serif',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0, 0.5)
             .setScrollFactor(0)
-            .setDepth(200);
-        
-        // Capture bar
-        this.captureBar = this.scene.add.rectangle(barX, captureBarY, captureBarWidth, captureBarHeight, 0xe74c3c, 1)
-            .setOrigin(0, 0.5)
-            .setScrollFactor(0)
-            .setDepth(201);
-        
-        // Текст capture
-        this.captureText = this.scene.add.text(barX + captureBarWidth + 20, captureBarY, 'CAPTURE 0/100', {
-            fontSize: '18px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif',
-            stroke: '#000000',
-            strokeThickness: 2
-        }).setOrigin(0, 0.5)
-        .setScrollFactor(0)
-        .setDepth(202);
+            .setDepth(202);
+            
+            // Іконки бонусів (під грошима)
+            this.bonusIconsContainer = this.scene.add.container(barX, moneyY + 30)
+                .setScrollFactor(0)
+                .setDepth(202);
+        } catch (error) {
+            console.error('❌❌❌ HUD.create() КРИТИЧНА ПОМИЛКА:', error);
+            console.error('❌❌❌ HUD.create() Stack:', error.stack);
+        }
     }
     
     setCaptureSystem(captureSystem) {
@@ -114,7 +146,30 @@ class HUD {
     }
     
     update() {
-        if (!this.player) return;
+        if (!this.player) {
+            return;
+        }
+        
+        // Оновлення грошей - ВИКОНУЄТЬСЯ ЗАВЖДИ НА ПОЧАТКУ
+        if (this.moneyText) {
+            if (!this.scene) {
+                console.error('❌ HUD.update() this.scene не існує!');
+                return;
+            }
+            
+            const runMoney = typeof this.scene.runMoney === 'number' ? this.scene.runMoney : 0;
+            const bankedMoney = typeof this.scene.bankedMoney === 'number' ? this.scene.bankedMoney : 0;
+            // runMoney в гривнях, bankedMoney в доларах
+            const moneyString = `Зароблено: ${runMoney.toLocaleString()} грн | Банк: $${bankedMoney.toLocaleString()}`;
+            
+            // Оновлюємо текст завжди
+            this.moneyText.setText(moneyString);
+        } else {
+            if (!this.moneyTextWarningShown) {
+                console.warn('⚠️ HUD.update() moneyText не існує!');
+                this.moneyTextWarningShown = true;
+            }
+        }
         
         // Оновлення бару стаміни
         const stamina = this.player.getStamina();
@@ -173,6 +228,36 @@ class HUD {
             // Текст capture
             this.captureText.setText(`CAPTURE ${Math.floor(capture)}/${captureMax}`);
         }
+        
+        // Оновлення іконок бонусів
+        this.updateBonusIcons();
+    }
+    
+    updateBonusIcons() {
+        if (!this.player || !this.bonusIconsContainer) return;
+        
+        // Очищаємо старі іконки
+        this.bonusIconsContainer.removeAll(true);
+        
+        let iconX = 0;
+        const iconSize = 20;
+        const iconSpacing = 25;
+        
+        // Іконка Скутера (якщо є активні speedBuffs)
+        if (this.player.speedBuffs && Array.isArray(this.player.speedBuffs) && this.player.speedBuffs.length > 0) {
+            const icon = this.scene.add.rectangle(iconX, 0, iconSize, iconSize, 0x0000ff, 1) // Синій для скутера
+                .setOrigin(0, 0.5);
+            this.bonusIconsContainer.add(icon);
+            iconX += iconSpacing;
+        }
+        
+        // Іконка імунітету до SoftCrowd
+        if (this.player.hasImmunityToSoftCrowd && typeof this.player.hasImmunityToSoftCrowd === 'function' && this.player.hasImmunityToSoftCrowd()) {
+            const icon = this.scene.add.rectangle(iconX, 0, iconSize, iconSize, 0x00ff00, 1) // Зелений для імунітету
+                .setOrigin(0, 0.5);
+            this.bonusIconsContainer.add(icon);
+            iconX += iconSpacing;
+        }
     }
     
     destroy() {
@@ -185,6 +270,8 @@ class HUD {
         if (this.captureBar) this.captureBar.destroy();
         if (this.captureBarBg) this.captureBarBg.destroy();
         if (this.captureText) this.captureText.destroy();
+        if (this.moneyText) this.moneyText.destroy();
+        if (this.bonusIconsContainer) this.bonusIconsContainer.destroy();
     }
 }
 
