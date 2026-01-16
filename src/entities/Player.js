@@ -9,6 +9,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         scene.add.existing(this);
         scene.physics.add.existing(this);
         
+        // Тип сутності для ідентифікації
+        this.type = 'Player';
+        
         // Фізика з обмеженням межами світу
         this.setCollideWorldBounds(true);
         this.setDrag(600); // Плавне гальмування
@@ -75,17 +78,92 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         
         // Дебафи керованості (для калюж)
         this.controlDebuffs = []; // Масив активних дебафів { multiplier, duration }
+        
+        // Анімації та напрямок
+        this.lastDirection = 'front'; // Останній напрямок руху (front, rear, left, right)
+        this.isFalling = false; // Стан падіння (коли авто збиває)
+        this.fallTimer = 0; // Таймер падіння
+        this.fallDuration = 1000; // Тривалість анімації падіння (мс)
     }
     
     createVisuals(scene) {
-        // Створюємо спрайт гравця через SpriteManager
-        const textureKey = spriteManager.createPlayerSprite(scene);
-        this.setTexture(textureKey);
+        // Створюємо спрайт гравця з початковою текстурою
+        this.setTexture('standing_front');
         
+        // Встановлюємо розмір (використовуємо розмір з конфігу або за замовчуванням)
         const config = spriteManager.PLAYER_SPRITE;
         const size = config.radius * 2;
         this.setDisplaySize(size, size);
         this.setDepth(10); // Гравець завжди поверх тайлів карти
+        
+        // Створюємо анімації
+        this.createAnimations(scene);
+    }
+    
+    /**
+     * Перевіряє чи гравець на калюжі (має controlDebuff від калюжі)
+     * @returns {boolean}
+     */
+    isOnPuddle() {
+        // Якщо є controlDebuff - гравець на калюжі
+        return this.controlDebuffs.length > 0;
+    }
+    
+    createAnimations(scene) {
+        // Анімація бігу вниз (front)
+        scene.anims.create({
+            key: 'run_front',
+            frames: [
+                { key: 'front_1' },
+                { key: 'front_2' },
+                { key: 'front_3' },
+                { key: 'front_4' }
+            ],
+            frameRate: 10,
+            repeat: -1
+        });
+        
+        // Анімація бігу вгору (rear)
+        scene.anims.create({
+            key: 'run_rear',
+            frames: [
+                { key: 'rear_1' },
+                { key: 'rear_2' },
+                { key: 'rear_3' },
+                { key: 'rear_4' }
+            ],
+            frameRate: 10,
+            repeat: -1
+        });
+        
+        // Анімація бігу вліво (left)
+        scene.anims.create({
+            key: 'run_left',
+            frames: [
+                { key: 'left_1' },
+                { key: 'left_2' },
+                { key: 'left_3' },
+                { key: 'left_4' }
+            ],
+            frameRate: 10,
+            repeat: -1
+        });
+        
+        // Анімація бігу вправо (right)
+        scene.anims.create({
+            key: 'run_right',
+            frames: [
+                { key: 'right_1' },
+                { key: 'right_2' },
+                { key: 'right_3' },
+                { key: 'right_4' }
+            ],
+            frameRate: 10,
+            repeat: -1
+        });
+        
+        // Анімація падіння (fall) - не використовуємо, керуємо вручну в updateVisuals
+        // fall_1 показується 200мс, fall_2 - решту часу (fallDuration - 200мс)
     }
     
     update(time, delta) {
@@ -152,6 +230,15 @@ class Player extends Phaser.Physics.Arcade.Sprite {
                 this.frozenPosition = null; // Очищаємо позицію
                 // Після заморозки потрібно відштовхнути гравця від кіоска
                 // Це буде зроблено в GameScene.checkTilemapCollisions()
+            }
+        }
+        
+        // Fall стан (при зіткненні з авто)
+        if (this.isFalling) {
+            this.fallTimer -= delta;
+            if (this.fallTimer <= 0) {
+                this.isFalling = false;
+                this.fallTimer = 0;
             }
         }
         
@@ -289,6 +376,20 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             moveY *= 0.707;
         }
         
+        // Оновлюємо останній напрямок руху
+        if (moveX !== 0 || moveY !== 0) {
+            // Визначаємо пріоритетний напрямок (вертикальний має пріоритет над горизонтальним)
+            if (moveY < 0) {
+                this.lastDirection = 'rear'; // Вгору
+            } else if (moveY > 0) {
+                this.lastDirection = 'front'; // Вниз
+            } else if (moveX < 0) {
+                this.lastDirection = 'left'; // Вліво
+            } else if (moveX > 0) {
+                this.lastDirection = 'right'; // Вправо
+            }
+        }
+        
         // Перевірка чи гравець рухається
         this.isMoving = (moveX !== 0 || moveY !== 0);
         
@@ -398,8 +499,67 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     }
     
     updateVisuals() {
-        // Оновлюємо колір спрайта залежно від стану
-        let tint = 0x3498db; // Синій за замовчуванням
+        // Пріоритет анімацій: fall > sliding (на калюжах) > slide (SHIFT) > frozen > рух > стояння
+        
+        // Анімація падіння (коли авто збиває)
+        if (this.isFalling) {
+            // Зупиняємо всі інші анімації
+            this.anims.stop();
+            
+            // fall_1 показується перші 200мс, fall_2 - решту часу
+            const fallFirstFrameDuration = 200; // Тривалість першого кадру (мс)
+            const timeSinceFall = this.fallDuration - this.fallTimer;
+            
+            if (timeSinceFall < fallFirstFrameDuration) {
+                // Показуємо перший кадр
+                if (this.texture.key !== 'fall_1') {
+                    this.setTexture('fall_1');
+                }
+            } else {
+                // Показуємо другий кадр до кінця заморозки
+                if (this.texture.key !== 'fall_2') {
+                    this.setTexture('fall_2');
+                }
+            }
+            
+            return; // Не показуємо інші анімації під час падіння
+        }
+        
+        // Анімація ковзання на калюжах (коли є controlDebuff від калюжі)
+        if (this.isOnPuddle() && this.isMoving) {
+            if (this.texture.key !== 'sliding') {
+                this.setTexture('sliding');
+                this.anims.stop(); // Зупиняємо будь-які інші анімації
+            }
+            return;
+        }
+        
+        // Анімація slide (SHIFT ability)
+        if (this.isSliding || this.slideActive) {
+            if (this.texture.key !== 'sliding') {
+                this.setTexture('sliding');
+                this.anims.stop(); // Зупиняємо будь-які інші анімації
+            }
+            return;
+        }
+        
+        // Якщо гравець рухається - показуємо анімацію бігу
+        if (this.isMoving && !this.isFrozen) {
+            const animKey = `run_${this.lastDirection}`;
+            if (!this.anims.isPlaying || this.anims.currentAnim.key !== animKey) {
+                this.anims.play(animKey, true);
+            }
+        } else {
+            // Якщо гравець стоїть - показуємо статичну позу
+            const standingKey = `standing_${this.lastDirection}`;
+            if (this.texture.key !== standingKey) {
+                this.setTexture(standingKey);
+                this.anims.stop(); // Зупиняємо анімацію бігу
+            }
+        }
+        
+        // Оновлюємо колір спрайта залежно від стану (тільки tint, не анімація)
+        let tint = 0xffffff; // Білий (без зміни кольору) за замовчуванням
         
         if (this.isFrozen) {
             tint = 0x9b59b6; // Фіолетовий коли заморожений
@@ -407,11 +567,20 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             tint = 0xe74c3c; // Червоний коли exhausted
         } else if (this.dashActive) {
             tint = 0xf39c12; // Помаранчевий під час dash
-        } else if (this.slideActive) {
-            tint = 0x2ecc71; // Зелений під час slide
         }
         
         this.setTint(tint);
+    }
+    
+    /**
+     * Запускає анімацію падіння (коли авто збиває гравця)
+     */
+    triggerFall() {
+        if (this.isFalling) return; // Вже падає
+        
+        this.isFalling = true;
+        this.fallTimer = this.fallDuration;
+        this.setVelocity(0, 0); // Зупиняємо рух під час падіння
     }
     
     // Геттери для HUD
