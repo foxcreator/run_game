@@ -27,6 +27,20 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         // Візуалізація
         this.createVisuals(scene);
         
+        // Налаштовуємо body розмір ПІСЛЯ createVisuals
+        if (this.body) {
+            let bodySize;
+            if (this.type === 'Blocker') {
+                bodySize = GAME_CONFIG.CHASERS.BLOCKER.BODY_SIZE || GAME_CONFIG.CHASERS.BLOCKER.DISPLAY_SIZE;
+            } else if (this.type === 'Sticker') {
+                bodySize = GAME_CONFIG.CHASERS.STICKER.BODY_SIZE || GAME_CONFIG.CHASERS.STICKER.DISPLAY_SIZE;
+            } else {
+                bodySize = 24; // Fallback
+            }
+            this.body.setSize(bodySize, bodySize);
+            this.setOrigin(0.5, 0.5); // Центруємо
+        }
+        
         // Параметри руху (будуть встановлені в підкласах)
         this.speed = 200;
         this.target = null; // Ціль (гравець)
@@ -67,6 +81,10 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         this.separationForce = { x: 0, y: 0 };
         this.separationRadius = 40; // Радіус для separation
         this.separationStrength = 0.3; // Сила відштовхування
+        
+        // Напрямок руху для анімацій
+        this.lastDirection = 'front'; // front, rear, left, right
+        this.isMovingChaser = false; // Чи рухається ворог (для анімацій)
     }
     
     setNavigationSystem(navigationSystem) {
@@ -81,16 +99,183 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
     }
     
     createVisuals(scene) {
-        // Створюємо спрайт ворога через SpriteManager
-        const textureKey = spriteManager.createChaserSprite(scene, this.type);
-        this.setTexture(textureKey);
+        console.log('🔍 Chaser.createVisuals викликано для типу:', this.type);
         
-        const config = this.type === 'Blocker' 
-            ? spriteManager.CHASER_SPRITES.BLOCKER 
-            : spriteManager.CHASER_SPRITES.STICKER;
-        const size = config.radius * 2;
-        this.setDisplaySize(size, size);
-        this.setDepth(GAME_CONFIG.CHASERS.COMMON.DEPTH);
+        // Для Blocker використовуємо текстури з анімаціями
+        if (this.type === 'Blocker') {
+            // Перевіряємо чи текстура завантажена
+            if (scene.textures.exists('blocker_standing_front')) {
+                console.log('✅ Blocker: використовую текстури');
+                this.setTexture('blocker_standing_front');
+                const size = GAME_CONFIG.CHASERS.BLOCKER.DISPLAY_SIZE;
+                this.setDisplaySize(size, size);
+                this.setDepth(GAME_CONFIG.CHASERS.COMMON.DEPTH);
+                
+                // Створюємо анімації для Blocker
+                this.createAnimations(scene);
+                
+                // Налаштовуємо body для колізій ПІСЛЯ того як спрайт створено
+                // Body налаштовується в конструкторі через physics.add.existing
+            } else {
+                console.warn('⚠️ Текстури Blocker не завантажені, використовую fallback');
+                console.log('Доступні текстури:', Object.keys(scene.textures.list).filter(k => k.includes('blocker')));
+                // Fallback: використовуємо старий спосіб
+                const textureKey = spriteManager.createChaserSprite(scene, this.type);
+                this.setTexture(textureKey);
+                const config = spriteManager.CHASER_SPRITES.BLOCKER;
+                const size = config.radius * 2;
+                this.setDisplaySize(size, size);
+                this.setDepth(GAME_CONFIG.CHASERS.COMMON.DEPTH);
+            }
+        } else if (this.type === 'Sticker') {
+            // Для Sticker використовуємо текстури з анімаціями
+            if (scene.textures.exists('sticker_standing_front')) {
+                console.log('✅ Sticker: використовую текстури');
+                this.setTexture('sticker_standing_front');
+                const size = GAME_CONFIG.CHASERS.STICKER.DISPLAY_SIZE;
+                this.setDisplaySize(size, size);
+                this.setDepth(GAME_CONFIG.CHASERS.COMMON.DEPTH);
+                
+                // Створюємо анімації для Sticker
+                this.createAnimations(scene);
+            } else {
+                console.warn('⚠️ Текстури Sticker не завантажені, використовую fallback');
+                console.log('Доступні текстури:', Object.keys(scene.textures.list).filter(k => k.includes('sticker')));
+                // Fallback: використовуємо старий спосіб
+                const textureKey = spriteManager.createChaserSprite(scene, this.type);
+                this.setTexture(textureKey);
+                const config = spriteManager.CHASER_SPRITES.STICKER;
+                const size = config.radius * 2;
+                this.setDisplaySize(size, size);
+                this.setDepth(GAME_CONFIG.CHASERS.COMMON.DEPTH);
+            }
+        } else {
+            // Fallback для інших типів
+            const textureKey = spriteManager.createChaserSprite(scene, this.type);
+            this.setTexture(textureKey);
+            
+            const config = spriteManager.CHASER_SPRITES.STICKER;
+            const size = config.radius * 2;
+            this.setDisplaySize(size, size);
+            this.setDepth(GAME_CONFIG.CHASERS.COMMON.DEPTH);
+        }
+    }
+    
+    /**
+     * Створює анімації для Blocker або Sticker (аналогічно до Player)
+     */
+    createAnimations(scene) {
+        if (this.type === 'Blocker') {
+            // Перевіряємо чи анімації вже створені (щоб не створювати повторно)
+            if (scene.anims.exists('blocker_run_front')) return;
+            
+            // Анімація бігу вниз (front)
+            scene.anims.create({
+                key: 'blocker_run_front',
+                frames: [
+                    { key: 'blocker_front_1' },
+                    { key: 'blocker_front_2' },
+                    { key: 'blocker_front_3' },
+                    { key: 'blocker_front_4' }
+                ],
+                frameRate: 10,
+                repeat: -1
+            });
+            
+            // Анімація бігу вгору (rear)
+            scene.anims.create({
+                key: 'blocker_run_rear',
+                frames: [
+                    { key: 'blocker_rear_1' },
+                    { key: 'blocker_rear_2' },
+                    { key: 'blocker_rear_3' },
+                    { key: 'blocker_rear_4' }
+                ],
+                frameRate: 10,
+                repeat: -1
+            });
+            
+            // Анімація бігу вліво (left)
+            scene.anims.create({
+                key: 'blocker_run_left',
+                frames: [
+                    { key: 'blocker_left_1' },
+                    { key: 'blocker_left_2' },
+                    { key: 'blocker_left_3' },
+                    { key: 'blocker_left_4' }
+                ],
+                frameRate: 10,
+                repeat: -1
+            });
+            
+            // Анімація бігу вправо (right)
+            scene.anims.create({
+                key: 'blocker_run_right',
+                frames: [
+                    { key: 'blocker_right_1' },
+                    { key: 'blocker_right_2' },
+                    { key: 'blocker_right_3' },
+                    { key: 'blocker_right_4' }
+                ],
+                frameRate: 10,
+                repeat: -1
+            });
+        } else if (this.type === 'Sticker') {
+            // Перевіряємо чи анімації вже створені (щоб не створювати повторно)
+            if (scene.anims.exists('sticker_run_front')) return;
+            
+            // Анімація бігу вниз (front)
+            scene.anims.create({
+                key: 'sticker_run_front',
+                frames: [
+                    { key: 'sticker_front_1' },
+                    { key: 'sticker_front_2' },
+                    { key: 'sticker_front_3' },
+                    { key: 'sticker_front_4' }
+                ],
+                frameRate: 10,
+                repeat: -1
+            });
+            
+            // Анімація бігу вгору (rear)
+            scene.anims.create({
+                key: 'sticker_run_rear',
+                frames: [
+                    { key: 'sticker_rear_1' },
+                    { key: 'sticker_rear_2' },
+                    { key: 'sticker_rear_3' },
+                    { key: 'sticker_rear_4' }
+                ],
+                frameRate: 10,
+                repeat: -1
+            });
+            
+            // Анімація бігу вліво (left)
+            scene.anims.create({
+                key: 'sticker_run_left',
+                frames: [
+                    { key: 'sticker_left_1' },
+                    { key: 'sticker_left_2' },
+                    { key: 'sticker_left_3' },
+                    { key: 'sticker_left_4' }
+                ],
+                frameRate: 10,
+                repeat: -1
+            });
+            
+            // Анімація бігу вправо (right)
+            scene.anims.create({
+                key: 'sticker_run_right',
+                frames: [
+                    { key: 'sticker_right_1' },
+                    { key: 'sticker_right_2' },
+                    { key: 'sticker_right_3' },
+                    { key: 'sticker_right_4' }
+                ],
+                frameRate: 10,
+                repeat: -1
+            });
+        }
     }
     
     setTarget(player) {
@@ -137,6 +322,9 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         
         // Базова логіка руху (перевизначається в підкласах)
         this.moveTowardsTarget(delta, time);
+        
+        // Оновлюємо візуалізацію (анімації)
+        this.updateVisuals();
     }
     
     /**
@@ -648,12 +836,12 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
                 // Немає waypoint - спробуємо прямий рух (якщо немає перешкод)
                 const hasDirectPath = this.checkDirectPathToTarget();
                 if (hasDirectPath) {
-                    const dx = this.target.x - this.x;
-                    const dy = this.target.y - this.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    
-                    if (distance > 0) {
-                        const speedMultiplier = this.getSpeedMultiplier();
+        const dx = this.target.x - this.x;
+        const dy = this.target.y - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance > 0) {
+            const speedMultiplier = this.getSpeedMultiplier();
                         let velocityX = (dx / distance) * this.speed * speedMultiplier;
                         let velocityY = (dy / distance) * this.speed * speedMultiplier;
                         
@@ -661,7 +849,7 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
                         velocityX += velocityX * this.separationForce.x;
                         velocityY += velocityY * this.separationForce.y;
                         
-                        this.setVelocity(velocityX, velocityY);
+            this.setVelocity(velocityX, velocityY);
                     }
                 } else {
                     // Немає прямого шляху і немає waypoint - зупиняємося і чекаємо перерахунку
@@ -671,6 +859,66 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
                 }
             }
         }
+    }
+    
+    /**
+     * Оновлює візуалізацію (анімації) залежно від стану руху
+     */
+    updateVisuals() {
+        // Тільки для Blocker та Sticker з текстурами
+        if (this.type !== 'Blocker' && this.type !== 'Sticker') return;
+        
+        const prefix = this.type.toLowerCase(); // 'blocker' або 'sticker'
+        
+        // Визначаємо чи ворог рухається
+        if (this.body) {
+            const velocity = Math.sqrt(
+                this.body.velocity.x * this.body.velocity.x + 
+                this.body.velocity.y * this.body.velocity.y
+            );
+            this.isMovingChaser = velocity > 10; // Поріг руху
+            
+            // Визначаємо напрямок руху
+            if (this.isMovingChaser) {
+                const velX = this.body.velocity.x;
+                const velY = this.body.velocity.y;
+                
+                // Визначаємо основний напрямок
+                if (Math.abs(velX) > Math.abs(velY)) {
+                    // Горизонтальний рух
+                    this.lastDirection = velX > 0 ? 'right' : 'left';
+                } else {
+                    // Вертикальний рух
+                    this.lastDirection = velY > 0 ? 'front' : 'rear';
+                }
+            }
+        }
+        
+        // Якщо ворог рухається - показуємо анімацію бігу
+        if (this.isMovingChaser && !this.isFrozen) {
+            const animKey = `${prefix}_run_${this.lastDirection}`;
+            if (!this.anims.isPlaying || this.anims.currentAnim.key !== animKey) {
+                this.anims.play(animKey, true);
+            }
+        } else {
+            // Якщо ворог стоїть - показуємо статичну позу
+            const standingKey = `${prefix}_standing_${this.lastDirection}`;
+            if (this.texture.key !== standingKey) {
+                this.setTexture(standingKey);
+                this.anims.stop(); // Зупиняємо анімацію бігу
+            }
+        }
+        
+        // Оновлюємо колір спрайта залежно від стану
+        let tint = 0xffffff; // Білий (без зміни кольору) за замовчуванням
+        
+        if (this.isFrozen) {
+            tint = 0x9b59b6; // Фіолетовий коли заморожений
+        } else if (this.lostLock) {
+            tint = 0x95a5a6; // Сірий коли втратив лок
+        }
+        
+        this.setTint(tint);
     }
     
     destroy() {

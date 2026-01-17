@@ -161,26 +161,12 @@ class SpriteManager {
                 width: 56,
                 height: 56
             },
-            ENERGY: {
-                type: 'color',
-                value: 0x00ff00, // Зелений (енергетик)
-                width: 20,
-                height: 20,
-                shape: 'circle'
-            },
             SCOOTER: {
                 type: 'color',
                 value: 0xff00ff, // Пурпурний (скутер)
                 width: 20,
                 height: 20,
                 shape: 'rectangle'
-            },
-            JOKE: {
-                type: 'color',
-                value: 0xffff00, // Жовтий (жарт)
-                width: 20,
-                height: 20,
-                shape: 'circle'
             },
             SMOKE: {
                 type: 'color',

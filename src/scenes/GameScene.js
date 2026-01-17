@@ -19,6 +19,7 @@ import Coin from '../entities/Coin.js';
 // EnergyDrink не потрібен - енергетик вже реалізований в кіосках
 // Scooter та Joke видалено - вони були незрозумілі гравцям
 import SmokeCloud from '../entities/bonuses/SmokeCloud.js';
+import Scooter from '../entities/bonuses/Scooter.js';
 import Exchange from '../entities/Exchange.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
 
@@ -1111,12 +1112,15 @@ class GameScene extends Phaser.Scene {
         }
         
         // Створюємо ворога
+        console.log(`🎯 Створюю ворога ${type} на позиції (${spawnX}, ${spawnY})`);
         let chaser;
         if (type === 'Blocker') {
             chaser = new ChaserBlocker(this, spawnX, spawnY);
+            console.log('✅ ChaserBlocker створено:', chaser);
         } else if (type === 'Sticker') {
             chaser = new ChaserSticker(this, spawnX, spawnY);
             chaser.setCaptureSystem(this.captureSystem);
+            console.log('✅ ChaserSticker створено:', chaser);
         } else {
             return null;
         }
@@ -1132,6 +1136,7 @@ class GameScene extends Phaser.Scene {
         }
         
         this.chasers.push(chaser);
+        console.log(`📊 Всього ворогів: ${this.chasers.length}`);
         
         return chaser;
     }
@@ -1895,8 +1900,8 @@ class GameScene extends Phaser.Scene {
                 continue;
             }
             
-            // Вибираємо випадковий бонус (Scooter та Joke видалено, залишається тільки SmokeCloud)
-            const bonusTypes = [SmokeCloud];
+            // Вибираємо випадковий бонус (SmokeCloud та Scooter)
+            const bonusTypes = [SmokeCloud, Scooter];
             const BonusClass = bonusTypes[Math.floor(Math.random() * bonusTypes.length)];
             
             // Створюємо бонус
