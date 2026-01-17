@@ -68,6 +68,69 @@ class BootScene extends Phaser.Scene {
         // Завантажуємо текстуру калюж
         this.load.image('lake', './src/assets/textures/lake.png');
         
+        // Завантажуємо текстури для ворога BLOCKER (enemy-1)
+        // Standing (статичні пози)
+        this.load.image('blocker_standing_front', './src/assets/textures/enemy-1/standing_front.png');
+        this.load.image('blocker_standing_rear', './src/assets/textures/enemy-1/standing_rear.png');
+        this.load.image('blocker_standing_left', './src/assets/textures/enemy-1/standing_left.png');
+        this.load.image('blocker_standing_right', './src/assets/textures/enemy-1/standing_right.png');
+        
+        // Running animations (біг по напрямках)
+        this.load.image('blocker_front_1', './src/assets/textures/enemy-1/front_1.png');
+        this.load.image('blocker_front_2', './src/assets/textures/enemy-1/front_2.png');
+        this.load.image('blocker_front_3', './src/assets/textures/enemy-1/front_3.png');
+        this.load.image('blocker_front_4', './src/assets/textures/enemy-1/front_4.png');
+        
+        this.load.image('blocker_rear_1', './src/assets/textures/enemy-1/rear_1.png');
+        this.load.image('blocker_rear_2', './src/assets/textures/enemy-1/rear_2.png');
+        this.load.image('blocker_rear_3', './src/assets/textures/enemy-1/rear_3.png');
+        this.load.image('blocker_rear_4', './src/assets/textures/enemy-1/rear_4.png');
+        
+        this.load.image('blocker_left_1', './src/assets/textures/enemy-1/left_1.png');
+        this.load.image('blocker_left_2', './src/assets/textures/enemy-1/left_2.png');
+        this.load.image('blocker_left_3', './src/assets/textures/enemy-1/left_3.png');
+        this.load.image('blocker_left_4', './src/assets/textures/enemy-1/left_4.png');
+        
+        this.load.image('blocker_right_1', './src/assets/textures/enemy-1/right_1.png');
+        this.load.image('blocker_right_2', './src/assets/textures/enemy-1/right_2.png');
+        this.load.image('blocker_right_3', './src/assets/textures/enemy-1/right_3.png');
+        this.load.image('blocker_right_4', './src/assets/textures/enemy-1/right_4.png');
+        
+        // Спеціальна анімація падіння
+        this.load.image('blocker_fall_1', './src/assets/textures/enemy-1/fall_1.png');
+        
+        // Завантажуємо текстури для ворога STICKER (enemy-2)
+        // Standing (статичні пози)
+        this.load.image('sticker_standing_front', './src/assets/textures/enemy-2/standing_front.png');
+        this.load.image('sticker_standing_rear', './src/assets/textures/enemy-2/standing_rear.png');
+        this.load.image('sticker_standing_left', './src/assets/textures/enemy-2/standing_left.png');
+        this.load.image('sticker_standing_right', './src/assets/textures/enemy-2/standing_right.png');
+        
+        // Running animations (біг по напрямках)
+        this.load.image('sticker_front_1', './src/assets/textures/enemy-2/front_1.png');
+        this.load.image('sticker_front_2', './src/assets/textures/enemy-2/front_2.png');
+        this.load.image('sticker_front_3', './src/assets/textures/enemy-2/front_3.png');
+        this.load.image('sticker_front_4', './src/assets/textures/enemy-2/front_4.png');
+        
+        this.load.image('sticker_rear_1', './src/assets/textures/enemy-2/rear_1.png');
+        this.load.image('sticker_rear_2', './src/assets/textures/enemy-2/rear_2.png');
+        this.load.image('sticker_rear_3', './src/assets/textures/enemy-2/rear_3.png');
+        this.load.image('sticker_rear_4', './src/assets/textures/enemy-2/rear_4.png');
+        
+        this.load.image('sticker_left_1', './src/assets/textures/enemy-2/left_1.png');
+        this.load.image('sticker_left_2', './src/assets/textures/enemy-2/left_2.png');
+        this.load.image('sticker_left_3', './src/assets/textures/enemy-2/left_3.png');
+        this.load.image('sticker_left_4', './src/assets/textures/enemy-2/left_4.png');
+        
+        this.load.image('sticker_right_1', './src/assets/textures/enemy-2/right_1.png');
+        this.load.image('sticker_right_2', './src/assets/textures/enemy-2/right_2.png');
+        this.load.image('sticker_right_3', './src/assets/textures/enemy-2/right_3.png');
+        this.load.image('sticker_right_4', './src/assets/textures/enemy-2/right_4.png');
+        
+        // Спеціальна анімація падіння
+        this.load.image('sticker_fall_1', './src/assets/textures/enemy-2/fall_1.png');
+        this.load.image('sticker_fall_2', './src/assets/textures/enemy-2/fall_2.png');
+        
         // Обробка помилок завантаження
         this.load.on('loaderror', (file) => {
             console.error('❌ Помилка завантаження файлу:', file.key, file.url);
