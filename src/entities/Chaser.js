@@ -1,6 +1,14 @@
 // Chaser - базовий клас для переслідувачів (ворогів)
+// Використовує NavigationSystem з waypoint-рухом та FSM
 import { GAME_CONFIG } from '../config/gameConfig.js';
 import spriteManager from '../utils/SpriteManager.js';
+
+// FSM стани
+const CHASER_STATES = {
+    IDLE: 'IDLE',
+    CHASE: 'CHASE',
+    ATTACK: 'ATTACK'
+};
 
 class Chaser extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y, type) {
@@ -22,7 +30,26 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         // Параметри руху (будуть встановлені в підкласах)
         this.speed = 200;
         this.target = null; // Ціль (гравець)
-        this.pathfindingSystem = null; // Система обходу перешкод
+        this.navigationSystem = null; // Система навігації (єдиний grid)
+        
+        // FSM стан
+        this.state = CHASER_STATES.IDLE;
+        
+        // Waypoint-рух
+        this.currentPath = null; // Масив waypoints (тайли) [{x, y}, ...]
+        this.pathIndex = 0; // Індекс поточного waypoint
+        this.currentWaypoint = null; // Поточний waypoint (світові координати)
+        
+        // Перерахунок шляху
+        this.lastPathRecalculation = 0; // Час останнього перерахунку
+        this.pathRecalculationInterval = 400; // Мінімальний інтервал перерахунку (мс)
+        this.lastPlayerTile = null; // Останній тайл гравця (для виявлення зміни)
+        
+        // Anti-stuck система
+        this.lastPosition = { x: this.x, y: this.y };
+        this.stuckTimer = 0; // Таймер застрягання
+        this.stuckThreshold = 500; // Час в мс для виявлення застрягання (зменшено з 1000 для швидшої реакції)
+        this.stuckDistanceThreshold = 8; // Мінімальна відстань для вважання рухом (збільшено для кращої чутливості)
         
         // Стан заморозки (для колізій з авто)
         this.isFrozen = false;
@@ -35,10 +62,22 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         this.lostLock = false; // Чи втратив лок
         this.lostLockTimer = 0; // Таймер втрати лока
         this.lastKnownPlayerPos = null; // Остання відома позиція гравця (для втрати лока)
+        
+        // Separation (щоб вороги не злипалися)
+        this.separationForce = { x: 0, y: 0 };
+        this.separationRadius = 40; // Радіус для separation
+        this.separationStrength = 0.3; // Сила відштовхування
     }
     
+    setNavigationSystem(navigationSystem) {
+        this.navigationSystem = navigationSystem;
+    }
+    
+    // Для сумісності зі старим кодом
     setPathfindingSystem(pathfindingSystem) {
-        this.pathfindingSystem = pathfindingSystem;
+        // Ігноруємо старий PathfindingSystem
+        // Використовуємо тільки NavigationSystem
+        console.warn('Chaser.setPathfindingSystem() застарілий, використовуйте setNavigationSystem()');
     }
     
     createVisuals(scene) {
@@ -67,7 +106,7 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         }
     }
     
-    update(delta) {
+    update(delta, time = 0) {
         if (!this.active) return;
         
         // Оновлюємо таймер заморозки
@@ -93,8 +132,52 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         
         if (!this.target) return;
         
+        // Оновлюємо FSM
+        this.updateState(delta, time);
+        
         // Базова логіка руху (перевизначається в підкласах)
-        this.moveTowardsTarget(delta);
+        this.moveTowardsTarget(delta, time);
+    }
+    
+    /**
+     * Оновлює FSM стан ворога
+     */
+    updateState(delta, time) {
+        if (!this.target) {
+            this.state = CHASER_STATES.IDLE;
+            return;
+        }
+        
+        const distanceToTarget = Phaser.Math.Distance.Between(
+            this.x, this.y, 
+            this.target.x, this.target.y
+        );
+        
+        // Перехід між станами
+        const attackDistance = 50; // Дистанція для атаки (зменшено, щоб не переходили в ATTACK коли є перешкоди)
+        const detectDistance = 1000; // Дистанція виявлення гравця
+        
+        switch (this.state) {
+            case CHASER_STATES.IDLE:
+                if (distanceToTarget <= detectDistance) {
+                    this.state = CHASER_STATES.CHASE;
+                }
+                break;
+                
+            case CHASER_STATES.CHASE:
+                if (distanceToTarget <= attackDistance) {
+                    this.state = CHASER_STATES.ATTACK;
+                } else if (distanceToTarget > detectDistance * 1.5) {
+                    this.state = CHASER_STATES.IDLE;
+                }
+                break;
+                
+            case CHASER_STATES.ATTACK:
+                if (distanceToTarget > attackDistance * 1.5) {
+                    this.state = CHASER_STATES.CHASE;
+                }
+                break;
+        }
     }
     
     updateSpeedDebuffs(delta) {
@@ -163,7 +246,311 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         return minMultiplier;
     }
     
-    moveTowardsTarget(delta) {
+    /**
+     * Перевіряє чи є прямий шлях до цілі без перешкод
+     * @returns {boolean}
+     */
+    checkDirectPathToTarget() {
+        if (!this.target || !this.navigationSystem) {
+            return false; // Немає системи - використовуємо pathfinding
+        }
+        
+        // Перевіряємо чи є перешкоди на прямому шляху
+        const dx = this.target.x - this.x;
+        const dy = this.target.y - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < 16) {
+            // Дуже близько (менше тайла) - вважаємо що шлях прямий
+            return true;
+        }
+        
+        // Використовуємо більше точок для перевірки (кожні ~16 пікселів)
+        const stepSize = 16; // Перевіряємо кожні 16 пікселів (половина тайла)
+        const steps = Math.ceil(distance / stepSize);
+        
+        // Перевіряємо кілька точок на шляху (мінімум 5, максимум 20)
+        const numChecks = Math.max(5, Math.min(steps, 20));
+        
+        for (let i = 1; i <= numChecks; i++) {
+            const t = i / numChecks;
+            const checkX = this.x + dx * t;
+            const checkY = this.y + dy * t;
+            
+            // Перевіряємо чи точка прохідна через NavigationSystem
+            const tile = this.navigationSystem.worldToTile(checkX, checkY);
+            
+            // Перевіряємо також сусідні тайли для надійності
+            const checkTiles = [
+                { x: tile.x, y: tile.y },
+                { x: tile.x + 1, y: tile.y },
+                { x: tile.x - 1, y: tile.y },
+                { x: tile.x, y: tile.y + 1 },
+                { x: tile.x, y: tile.y - 1 }
+            ];
+            
+            let hasObstacle = false;
+            for (const checkTile of checkTiles) {
+                if (!this.navigationSystem.isWalkable(checkTile.x, checkTile.y)) {
+                    hasObstacle = true;
+                    break;
+                }
+            }
+            
+            if (hasObstacle) {
+                return false; // Знайдено перешкоду
+            }
+        }
+        
+        return true; // Прямий шлях без перешкод
+    }
+    
+    /**
+     * Оновлює anti-stuck систему
+     */
+    updateAntiStuck(delta) {
+        if (!this.body) return;
+        
+        const distanceMoved = Phaser.Math.Distance.Between(
+            this.lastPosition.x, this.lastPosition.y,
+            this.x, this.y
+        );
+        
+        // Перевіряємо чи ворог намагається рухатися, але не рухається
+        const velocity = Math.sqrt(
+            this.body.velocity.x * this.body.velocity.x + 
+            this.body.velocity.y * this.body.velocity.y
+        );
+        
+        const isMoving = velocity > 10; // Має швидкість
+        const hasMoved = distanceMoved >= this.stuckDistanceThreshold; // Реально рухається
+        
+        // Якщо намагається рухатися, але не рухається - це застрягання
+        if (isMoving && !hasMoved) {
+            this.stuckTimer += delta;
+            
+            if (this.stuckTimer >= this.stuckThreshold) {
+                // Ворог застряг - інвалідовуємо шлях і перераховуємо
+                this.invalidatePath();
+                this.stuckTimer = 0;
+                
+                // Скидаємо velocity щоб не бути в нескінченному циклі
+                if (this.body) {
+                    this.body.setVelocity(0, 0);
+                }
+            }
+        } else {
+            // Ворог рухається - скидаємо таймер
+            this.stuckTimer = 0;
+        }
+        
+        // Зберігаємо поточну позицію
+        this.lastPosition.x = this.x;
+        this.lastPosition.y = this.y;
+    }
+    
+    /**
+     * Інвалідовує поточний шлях (для перерахунку)
+     */
+    invalidatePath() {
+        this.currentPath = null;
+        this.pathIndex = 0;
+        this.currentWaypoint = null;
+    }
+    
+    /**
+     * Перевіряє чи потрібен перерахунок шляху
+     * @param {number} time - Поточний час в мс
+     * @returns {boolean}
+     */
+    shouldRecalculatePath(time) {
+        if (!this.target || !this.navigationSystem) {
+            return false;
+        }
+        
+        // Перерахунок якщо гравець змінив tile
+        const currentPlayerTile = this.navigationSystem.worldToTile(
+            this.target.x, 
+            this.target.y
+        );
+        
+        if (!this.lastPlayerTile || 
+            currentPlayerTile.x !== this.lastPlayerTile.x || 
+            currentPlayerTile.y !== this.lastPlayerTile.y) {
+            this.lastPlayerTile = currentPlayerTile;
+            return true;
+        }
+        
+        // Перерахунок якщо минуло >= 400ms з останнього
+        if (time - this.lastPathRecalculation >= this.pathRecalculationInterval) {
+            return true;
+        }
+        
+        // Перерахунок якщо немає шляху
+        if (!this.currentPath || this.currentPath.length === 0) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Обчислює шлях до гравця
+     * @param {number} time - Поточний час в мс
+     */
+    calculatePath(time) {
+        if (!this.target || !this.navigationSystem) {
+            this.currentPath = null;
+            return;
+        }
+        
+        const fromTile = this.navigationSystem.worldToTile(this.x, this.y);
+        const toTile = this.navigationSystem.worldToTile(this.target.x, this.target.y);
+        
+        // Знаходимо шлях через A*
+        const path = this.navigationSystem.findPath(
+            fromTile.x, fromTile.y,
+            toTile.x, toTile.y
+        );
+        
+        if (path && path.length > 0) {
+            this.currentPath = path;
+            this.pathIndex = 0;
+            this.updateCurrentWaypoint();
+            this.lastPathRecalculation = time;
+        } else {
+            // Шлях не знайдено - інвалідовуємо
+            this.currentPath = null;
+            this.pathIndex = 0;
+            this.currentWaypoint = null;
+        }
+    }
+    
+    /**
+     * Оновлює поточний waypoint з path
+     */
+    updateCurrentWaypoint() {
+        if (!this.currentPath || this.currentPath.length === 0) {
+            this.currentWaypoint = null;
+            return;
+        }
+        
+        // Переходимо до наступного waypoint якщо досягли поточного
+        while (this.pathIndex < this.currentPath.length) {
+            const waypointTile = this.currentPath[this.pathIndex];
+            const waypointWorld = this.navigationSystem.tileToWorld(
+                waypointTile.x, 
+                waypointTile.y
+            );
+            
+            const distanceToWaypoint = Phaser.Math.Distance.Between(
+                this.x, this.y,
+                waypointWorld.x, waypointWorld.y
+            );
+            
+            // Якщо досягли waypoint (радіус досягнення = половина тайла)
+            if (distanceToWaypoint < this.navigationSystem.tileSize / 2) {
+                this.pathIndex++;
+            } else {
+                this.currentWaypoint = waypointWorld;
+                break;
+            }
+        }
+        
+        // Якщо досягли кінця шляху
+        if (this.pathIndex >= this.currentPath.length) {
+            this.currentWaypoint = null;
+        }
+    }
+    
+    /**
+     * Обчислює separation force від інших ворогів
+     * @param {Array<Chaser>} otherChasers - Масив інших ворогів
+     */
+    calculateSeparationForce(otherChasers) {
+        this.separationForce.x = 0;
+        this.separationForce.y = 0;
+        
+        if (!otherChasers || otherChasers.length === 0) {
+            return;
+        }
+        
+        let separationCount = 0;
+        
+        for (const other of otherChasers) {
+            if (!other || !other.active || other === this) {
+                continue;
+            }
+            
+            const dx = this.x - other.x;
+            const dy = this.y - other.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Якщо інший ворог близько
+            if (distance > 0 && distance < this.separationRadius) {
+                // Нормалізуємо напрямок
+                const normalizedX = dx / distance;
+                const normalizedY = dy / distance;
+                
+                // Сила обернено пропорційна відстані
+                const strength = this.separationStrength * (1 - distance / this.separationRadius);
+                
+                this.separationForce.x += normalizedX * strength;
+                this.separationForce.y += normalizedY * strength;
+                separationCount++;
+            }
+        }
+        
+        // Нормалізуємо separation force
+        if (separationCount > 0) {
+            const separationMag = Math.sqrt(
+                this.separationForce.x * this.separationForce.x + 
+                this.separationForce.y * this.separationForce.y
+            );
+            
+            if (separationMag > 0) {
+                this.separationForce.x = (this.separationForce.x / separationMag) * this.separationStrength;
+                this.separationForce.y = (this.separationForce.y / separationMag) * this.separationStrength;
+            }
+        }
+    }
+    
+    /**
+     * Рухається до поточного waypoint
+     * @param {number} delta - Час з останнього оновлення (мс)
+     */
+    moveToWaypoint(delta) {
+        if (!this.currentWaypoint) {
+            // Немає waypoint - не рухаємося
+            if (this.body) {
+                this.body.setVelocity(0, 0);
+            }
+            return;
+        }
+        
+        const dx = this.currentWaypoint.x - this.x;
+        const dy = this.currentWaypoint.y - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance > 0) {
+            const speedMultiplier = this.getSpeedMultiplier();
+            let velocityX = (dx / distance) * this.speed * speedMultiplier;
+            let velocityY = (dy / distance) * this.speed * speedMultiplier;
+            
+            // Додаємо separation force (щоб не злипалися)
+            // Separation force додається як процент від швидкості
+            velocityX += velocityX * this.separationForce.x;
+            velocityY += velocityY * this.separationForce.y;
+            
+            this.setVelocity(velocityX, velocityY);
+        } else {
+            if (this.body) {
+                this.body.setVelocity(0, 0);
+            }
+        }
+    }
+    
+    moveTowardsTarget(delta, time = 0) {
         // Якщо втратив лок - рухаємося до останньої відомої позиції
         if (this.lostLock && this.lastKnownPlayerPos) {
             const dx = this.lastKnownPlayerPos.x - this.x;
@@ -179,16 +566,110 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
             return;
         }
         
-        // Базова реалізація - рух до цілі (перевизначається в підкласах)
-        const dx = this.target.x - this.x;
-        const dy = this.target.y - this.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        // Оновлюємо anti-stuck
+        this.updateAntiStuck(delta);
         
-        if (distance > 0) {
-            const speedMultiplier = this.getSpeedMultiplier();
-            const velocityX = (dx / distance) * this.speed * speedMultiplier;
-            const velocityY = (dy / distance) * this.speed * speedMultiplier;
-            this.setVelocity(velocityX, velocityY);
+        // IDLE стан - не рухаємося
+        if (this.state === CHASER_STATES.IDLE) {
+            if (this.body) {
+                this.body.setVelocity(0, 0);
+            }
+            return;
+        }
+        
+        // ATTACK стан - спочатку перевіряємо чи є прямий шлях, якщо ні - використовуємо pathfinding
+        if (this.state === CHASER_STATES.ATTACK) {
+            // ЗАВЖДИ перевіряємо чи є прямий шлях до гравця без перешкод
+            const hasDirectPath = this.checkDirectPathToTarget();
+            
+            if (hasDirectPath) {
+                // Прямий рух до гравця (для атаки) - тільки якщо немає перешкод
+                const dx = this.target.x - this.x;
+                const dy = this.target.y - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 0) {
+                    const speedMultiplier = this.getSpeedMultiplier();
+                    let velocityX = (dx / distance) * this.speed * speedMultiplier;
+                    let velocityY = (dy / distance) * this.speed * speedMultiplier;
+                    
+                    // Додаємо separation force
+                    velocityX += velocityX * this.separationForce.x;
+                    velocityY += velocityY * this.separationForce.y;
+                    
+                    this.setVelocity(velocityX, velocityY);
+                }
+            } else {
+                // Немає прямого шляху - ОБОВ'ЯЗКОВО використовуємо pathfinding
+                // Інвалідовуємо поточний шлях і перераховуємо
+                if (!this.currentPath || this.shouldRecalculatePath(time)) {
+                    this.calculatePath(time);
+                }
+                
+                // Якщо немає шляху - спробуємо ще раз
+                if (!this.currentPath || this.currentPath.length === 0) {
+                    this.calculatePath(time);
+                }
+                
+                this.updateCurrentWaypoint();
+                
+                // Рухаємося до waypoint
+                if (this.currentWaypoint) {
+                    this.moveToWaypoint(delta);
+                } else {
+                    // Якщо все ще немає waypoint - зупиняємося і чекаємо
+                    if (this.body) {
+                        this.body.setVelocity(0, 0);
+                    }
+                }
+            }
+            return;
+        }
+        
+        // CHASE стан - waypoint-рух через NavigationSystem
+        if (this.state === CHASER_STATES.CHASE) {
+            // Перевіряємо чи потрібен перерахунок шляху
+            if (this.shouldRecalculatePath(time)) {
+                this.calculatePath(time);
+            }
+            
+            // Якщо немає шляху - спробуємо знайти новий
+            if (!this.currentPath || this.currentPath.length === 0) {
+                this.calculatePath(time);
+            }
+            
+            // Оновлюємо поточний waypoint
+            this.updateCurrentWaypoint();
+            
+            // Якщо є waypoint - рухаємося до нього
+            if (this.currentWaypoint) {
+                this.moveToWaypoint(delta);
+            } else {
+                // Немає waypoint - спробуємо прямий рух (якщо немає перешкод)
+                const hasDirectPath = this.checkDirectPathToTarget();
+                if (hasDirectPath) {
+                    const dx = this.target.x - this.x;
+                    const dy = this.target.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance > 0) {
+                        const speedMultiplier = this.getSpeedMultiplier();
+                        let velocityX = (dx / distance) * this.speed * speedMultiplier;
+                        let velocityY = (dy / distance) * this.speed * speedMultiplier;
+                        
+                        // Додаємо separation force
+                        velocityX += velocityX * this.separationForce.x;
+                        velocityY += velocityY * this.separationForce.y;
+                        
+                        this.setVelocity(velocityX, velocityY);
+                    }
+                } else {
+                    // Немає прямого шляху і немає waypoint - зупиняємося і чекаємо перерахунку
+                    if (this.body) {
+                        this.body.setVelocity(0, 0);
+                    }
+                }
+            }
         }
     }
     

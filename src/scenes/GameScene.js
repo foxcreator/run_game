@@ -6,6 +6,7 @@ import Minimap from '../ui/Minimap.js';
 import CaptureSystem from '../systems/CaptureSystem.js';
 import TilemapSystem from '../systems/TilemapSystem.js';
 import PathfindingSystem from '../systems/PathfindingSystem.js';
+import NavigationSystem from '../systems/NavigationSystem.js';
 import SaveSystem from '../systems/SaveSystem.js';
 import SoftCrowd from '../entities/SoftCrowd.js';
 import PuddleSlip from '../entities/PuddleSlip.js';
@@ -65,8 +66,11 @@ class GameScene extends Phaser.Scene {
             return;
         }
         
-        // Створюємо систему обходу перешкод (pathfinding)
+        // Створюємо систему обходу перешкод (pathfinding) - для сумісності зі старим кодом
         this.pathfindingSystem = new PathfindingSystem(this.tilemap);
+        
+        // Створюємо навігаційну систему з єдиним grid (для нової AI)
+        this.navigationSystem = new NavigationSystem(this.tilemap);
 
         // Знаходимо прохідний тайл для старту гравця (біля центру)
         const startPos = this.findWalkablePosition(this.worldWidth / 2, this.worldHeight / 2);
@@ -198,6 +202,10 @@ class GameScene extends Phaser.Scene {
         
         // Налаштовуємо обробник ESC для паузи
         this.setupPauseControls();
+        
+        // Оптимізація: throttling для перерахунку шляхів (не більше N за tick)
+        this.pathRecalculationQueue = []; // Черга ворогів для перерахунку шляху
+        this.maxPathRecalculationsPerTick = 3; // Максимум перерахунків за один tick (для 2-20 ворогів)
     }
     
     setupPauseControls() {
@@ -1114,7 +1122,15 @@ class GameScene extends Phaser.Scene {
         }
         
         chaser.setTarget(this.player);
-        chaser.setPathfindingSystem(this.pathfindingSystem);
+        chaser.setPathfindingSystem(this.pathfindingSystem); // Для сумісності
+        
+        // Встановлюємо NavigationSystem (якщо метод існує)
+        if (chaser.setNavigationSystem && this.navigationSystem) {
+            chaser.setNavigationSystem(this.navigationSystem);
+        } else {
+            console.warn('Chaser.setNavigationSystem не знайдено або NavigationSystem не створено');
+        }
+        
         this.chasers.push(chaser);
         
         return chaser;
@@ -1264,10 +1280,47 @@ class GameScene extends Phaser.Scene {
             }
         }
         
+        // Оновлення ворогів з throttling перерахунку шляхів
+        // Спочатку збираємо ворогів, яким потрібен перерахунок
+        this.pathRecalculationQueue = [];
+        for (const chaser of this.chasers) {
+            if (chaser && chaser.active && typeof chaser.shouldRecalculatePath === 'function') {
+                // Перевіряємо чи потрібен перерахунок
+                if (chaser.shouldRecalculatePath(time)) {
+                    this.pathRecalculationQueue.push(chaser);
+                }
+            }
+        }
+        
+        // Перераховуємо шляхи з обмеженням кількості за tick
+        const recalculationsThisTick = Math.min(
+            this.pathRecalculationQueue.length, 
+            this.maxPathRecalculationsPerTick
+        );
+        
+        // Перемішуємо чергу для справедливого розподілу
+        this.pathRecalculationQueue.sort(() => Math.random() - 0.5);
+        
+        for (let i = 0; i < recalculationsThisTick; i++) {
+            const chaser = this.pathRecalculationQueue[i];
+            if (chaser && chaser.active && typeof chaser.calculatePath === 'function') {
+                chaser.calculatePath(time);
+            }
+        }
+        
         // Оновлення ворогів
         for (const chaser of this.chasers) {
             if (chaser && chaser.active) {
-                chaser.update(delta);
+                // Обчислюємо separation force перед оновленням (якщо метод існує)
+                if (typeof chaser.calculateSeparationForce === 'function') {
+                    chaser.calculateSeparationForce(this.chasers);
+                }
+                
+                // Оновлюємо ворога з передачею часу
+                if (typeof chaser.update === 'function') {
+                    chaser.update(delta, time);
+                }
+                
                 // Перевіряємо колізії ворогів з тайлами карти
                 this.checkChaserTilemapCollisions(chaser);
                 this.checkChaserChaserCollisions(chaser);

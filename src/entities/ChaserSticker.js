@@ -18,14 +18,21 @@ class ChaserSticker extends Chaser {
         this.captureSystem = captureSystem;
     }
     
-    moveTowardsTarget(delta) {
-        if (!this.target) return;
-        
-        // Якщо втратив лок - використовуємо базову логіку
-        if (this.lostLock) {
-            super.moveTowardsTarget(delta);
-            return;
+    update(delta) {
+        // Оновлюємо cooldown перед базовим оновленням
+        if (this.hitCooldown > 0) {
+            this.hitCooldown -= delta;
+            if (this.hitCooldown < 0) {
+                this.hitCooldown = 0;
+            }
         }
+        
+        // Викликаємо базове оновлення
+        super.update(delta);
+    }
+    
+    moveTowardsTarget(delta, time = 0) {
+        if (!this.target) return;
         
         // Оновлюємо cooldown
         if (this.hitCooldown > 0) {
@@ -35,7 +42,7 @@ class ChaserSticker extends Chaser {
             }
         }
         
-        // Якщо на cooldown - відходимо назад
+        // Якщо на cooldown після удару - відходимо назад
         if (this.hitCooldown > 0) {
             const dx = this.target.x - this.x;
             const dy = this.target.y - this.y;
@@ -52,33 +59,10 @@ class ChaserSticker extends Chaser {
             return;
         }
         
-        // Рухаємося безпосередньо на гравця з обходом перешкод
-        const targetX = this.target.x;
-        const targetY = this.target.y;
-        
-        // Використовуємо pathfinding для обходу перешкод
-        const speedMultiplier = this.getSpeedMultiplier();
-        if (this.pathfindingSystem) {
-            const radius = GAME_CONFIG.CHASERS.COMMON.COLLISION_RADIUS;
-            const direction = this.pathfindingSystem.getSteeringDirection(
-                this.x, this.y, targetX, targetY, radius
-            );
-            
-            const velocityX = direction.x * this.speed * speedMultiplier;
-            const velocityY = direction.y * this.speed * speedMultiplier;
-            this.setVelocity(velocityX, velocityY);
-        } else {
-            // Якщо pathfinding не доступний - рухаємося напряму
-            const dx = targetX - this.x;
-            const dy = targetY - this.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance > 0) {
-                const velocityX = (dx / distance) * this.speed * speedMultiplier;
-                const velocityY = (dy / distance) * this.speed * speedMultiplier;
-                this.setVelocity(velocityX, velocityY);
-            }
-        }
+        // Використовуємо базову логіку для IDLE/CHASE/ATTACK станів
+        // Sticker рухається безпосередньо до гравця через waypoints в CHASE,
+        // та прямим рухом в ATTACK для атаки
+        super.moveTowardsTarget(delta, time);
     }
     
     onHitPlayer() {
