@@ -32,8 +32,8 @@ class Bonus extends Phaser.GameObjects.Rectangle {
         this.rotationSpeed = 0.03;
         
         // Параметри для магнітного ефекту
-        this.magnetRadius = 60; // Радіус притягування
-        this.magnetSpeed = 300; // Швидкість притягування
+        this.magnetRadius = 80; // Радіус притягування (збільшено для легшого підбору)
+        this.magnetSpeed = 400; // Швидкість притягування (збільшено для швидшого підбору)
         this.collected = false; // Флаг щоб не збирати двічі
     }
     
@@ -56,14 +56,8 @@ class Bonus extends Phaser.GameObjects.Rectangle {
                 const moveX = (dx / distance) * speed;
                 const moveY = (dy / distance) * speed;
                 
-                this.x += moveX;
-                this.y += moveY;
-                
-                // Оновлюємо позицію body (Phaser автоматично синхронізує body з this.x/this.y)
-                if (this.body) {
-                    this.body.x = this.x;
-                    this.body.y = this.y;
-                }
+                // Використовуємо setPosition для коректного оновлення body
+                this.setPosition(this.x + moveX, this.y + moveY);
             }
         }
     }
