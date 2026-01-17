@@ -131,6 +131,16 @@ class BootScene extends Phaser.Scene {
         this.load.image('sticker_fall_1', './src/assets/textures/enemy-2/fall_1.png');
         this.load.image('sticker_fall_2', './src/assets/textures/enemy-2/fall_2.png');
         
+        // Завантажуємо музичні треки
+        this.load.audio('back_1', './src/assets/music/back_1.mp3');
+        this.load.audio('back_2', './src/assets/music/back_2.mp3');
+        this.load.audio('back_3', './src/assets/music/back_3.mp3');
+        this.load.audio('back_4', './src/assets/music/back_4.mp3');
+        this.load.audio('back_5', './src/assets/music/back_5.mp3');
+        
+        // Завантажуємо звукові ефекти
+        this.load.audio('running', './src/assets/sounds/running.mp3');
+        
         // Обробка помилок завантаження
         this.load.on('loaderror', (file) => {
             console.error('❌ Помилка завантаження файлу:', file.key, file.url);

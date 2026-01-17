@@ -8,6 +8,7 @@ import TilemapSystem from '../systems/TilemapSystem.js';
 import PathfindingSystem from '../systems/PathfindingSystem.js';
 import NavigationSystem from '../systems/NavigationSystem.js';
 import SaveSystem from '../systems/SaveSystem.js';
+import AudioManager from '../systems/AudioManager.js';
 import SoftCrowd from '../entities/SoftCrowd.js';
 import PuddleSlip from '../entities/PuddleSlip.js';
 import TapeGate from '../entities/TapeGate.js';
@@ -87,6 +88,9 @@ class GameScene extends Phaser.Scene {
         
         // Створюємо систему захоплення
         this.captureSystem = new CaptureSystem(this);
+        
+        // Створюємо аудіо менеджер
+        this.audioManager = new AudioManager(this);
         
         // Створюємо HUD (залишаємо на фіксованій позиції екрану)
         // HUD створюється після tilemap, щоб бути поверх кіосків
@@ -177,6 +181,18 @@ class GameScene extends Phaser.Scene {
         // Налаштовуємо колізії між гравцем та обмінниками
         this.setupExchangeCollisions();
         
+        // Ініціалізуємо та запускаємо музику
+        if (this.audioManager.init()) {
+            this.audioManager.startMusic();
+            console.log('🎵 Фонова музика запущена');
+        }
+        
+        // Передаємо audioManager в Player для звукових ефектів (напряму через властивість)
+        if (this.player) {
+            this.player.audioManager = this.audioManager;
+            console.log('✅ AudioManager переданий в Player');
+        }
+        
         // Гроші за забіг
         this.runMoney = 0;
         
@@ -231,6 +247,12 @@ class GameScene extends Phaser.Scene {
         this.isPaused = true;
         this.physics.pause();
         
+        // Зупиняємо музику та звуки
+        if (this.audioManager) {
+            this.audioManager.pauseMusic();
+            this.audioManager.pauseSounds();
+        }
+        
         // Створюємо меню паузи
         this.createPauseMenu();
     }
@@ -240,6 +262,12 @@ class GameScene extends Phaser.Scene {
         
         this.isPaused = false;
         this.physics.resume();
+        
+        // Відновлюємо музику та звуки
+        if (this.audioManager) {
+            this.audioManager.resumeMusic();
+            this.audioManager.resumeSounds();
+        }
         
         // Видаляємо меню паузи та overlay
         if (this.pauseMenu) {
@@ -311,6 +339,10 @@ class GameScene extends Phaser.Scene {
         // Кнопка "ЗБЕРЕГТИ І ВИЙТИ"
         const saveAndExitButton = this.createPauseButton(0, startY + buttonSpacing * 2, buttonWidth, buttonHeight, 'ЗБЕРЕГТИ І ВИЙТИ', () => {
             // Гроші вже зберігаються через SaveSystem автоматично
+            // Зупиняємо музику
+            if (this.audioManager) {
+                this.audioManager.stopMusic();
+            }
             // Просто виходимо в меню
             this.resumeGame(); // Знімаємо паузу перед виходом
             this.scene.start('MenuScene');
@@ -380,7 +412,7 @@ class GameScene extends Phaser.Scene {
         
         // Створюємо меню налаштувань (схоже на MenuScene)
         const settingsWidth = 550;
-        const settingsHeight = 420;
+        const settingsHeight = 620; // Збільшили висоту для звуків
         const settingsBoxX = width / 2;
         const settingsBoxY = height / 2;
         
@@ -414,18 +446,196 @@ class GameScene extends Phaser.Scene {
             strokeThickness: 4
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
         
-        // Інформація про налаштування
-        const infoText = this.add.text(settingsBoxX, settingsBoxY - 20, 'Налаштування в розробці\n\nТут будуть:\n• Гучність звуку\n• Гучність музики\n• Якість графіки\n• Управління', {
-            fontSize: '22px',
+        // === МУЗИКА ===
+        const musicLabelY = settingsBoxY - 80;
+        const musicLabel = this.add.text(settingsBoxX, musicLabelY, 'МУЗИКА', {
+            fontSize: '24px',
             fill: '#FFFFFF',
             fontFamily: 'Arial, sans-serif',
-            align: 'center'
+            fontStyle: 'bold'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
+        
+        // Слайдер гучності музики
+        const sliderY = musicLabelY + 40;
+        const sliderWidth = 400;
+        const sliderHeight = 10;
+        
+        // Фон слайдера
+        const musicSliderBg = this.add.rectangle(
+            settingsBoxX,
+            sliderY,
+            sliderWidth,
+            sliderHeight,
+            0x333333
+        ).setScrollFactor(0).setDepth(1003);
+        
+        // Заповнення слайдера
+        const currentVolume = this.audioManager ? this.audioManager.getMusicVolume() : 0.5;
+        const musicSliderFill = this.add.rectangle(
+            settingsBoxX - sliderWidth / 2,
+            sliderY,
+            sliderWidth * currentVolume,
+            sliderHeight,
+            0x00ff00
+        ).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1004);
+        
+        // Повзунок
+        const musicSliderHandle = this.add.circle(
+            settingsBoxX - sliderWidth / 2 + sliderWidth * currentVolume,
+            sliderY,
+            15,
+            0xffffff
+        ).setScrollFactor(0).setDepth(1005);
+        musicSliderHandle.setInteractive({ draggable: true, useHandCursor: true });
+        
+        // Текст гучності
+        const musicVolumeText = this.add.text(
+            settingsBoxX,
+            sliderY + 30,
+            `${Math.round(currentVolume * 100)}%`,
+            {
+                fontSize: '20px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial, sans-serif'
+            }
+        ).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
+        
+        // Обробник перетягування
+        musicSliderHandle.on('drag', (pointer, dragX) => {
+            const minX = settingsBoxX - sliderWidth / 2;
+            const maxX = settingsBoxX + sliderWidth / 2;
+            const clampedX = Phaser.Math.Clamp(dragX, minX, maxX);
+            
+            musicSliderHandle.x = clampedX;
+            
+            const volume = (clampedX - minX) / sliderWidth;
+            musicSliderFill.width = sliderWidth * volume;
+            musicVolumeText.setText(`${Math.round(volume * 100)}%`);
+            
+            if (this.audioManager) {
+                this.audioManager.setMusicVolume(volume);
+            }
+        });
+        
+        // Кнопка вимкнення/увімкнення музики
+        const musicToggleY = sliderY + 70;
+        const isMusicEnabled = this.audioManager ? this.audioManager.isMusicEnabled() : true;
+        const musicToggleButton = this.createPauseButton(
+            settingsBoxX,
+            musicToggleY,
+            300,
+            50,
+            isMusicEnabled ? '🔊 МУЗИКА УВІМКНЕНА' : '🔇 МУЗИКА ВИМКНЕНА',
+            () => {
+                if (this.audioManager) {
+                    const newState = !this.audioManager.isMusicEnabled();
+                    this.audioManager.setMusicEnabled(newState);
+                    
+                    // Оновлюємо текст кнопки
+                    if (musicToggleButton.text) {
+                        musicToggleButton.text.setText(newState ? '🔊 МУЗИКА УВІМКНЕНА' : '🔇 МУЗИКА ВИМКНЕНА');
+                    }
+                }
+            }
+        );
+        musicToggleButton.setScrollFactor(0).setDepth(1003);
+        
+        // === ЗВУКИ ===
+        const soundsLabelY = musicToggleY + 80;
+        const soundsLabel = this.add.text(settingsBoxX, soundsLabelY, 'ЗВУКИ', {
+            fontSize: '24px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
+        
+        // Слайдер гучності звуків
+        const soundsSliderY = soundsLabelY + 40;
+        
+        // Фон слайдера
+        const soundsSliderBg = this.add.rectangle(
+            settingsBoxX,
+            soundsSliderY,
+            sliderWidth,
+            sliderHeight,
+            0x333333
+        ).setScrollFactor(0).setDepth(1003);
+        
+        // Заповнення слайдера
+        const currentSoundsVolume = this.audioManager ? this.audioManager.getSoundsVolume() : 0.7;
+        const soundsSliderFill = this.add.rectangle(
+            settingsBoxX - sliderWidth / 2,
+            soundsSliderY,
+            sliderWidth * currentSoundsVolume,
+            sliderHeight,
+            0x00ff00
+        ).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1004);
+        
+        // Повзунок
+        const soundsSliderHandle = this.add.circle(
+            settingsBoxX - sliderWidth / 2 + sliderWidth * currentSoundsVolume,
+            soundsSliderY,
+            15,
+            0xffffff
+        ).setScrollFactor(0).setDepth(1005);
+        soundsSliderHandle.setInteractive({ draggable: true, useHandCursor: true });
+        
+        // Текст гучності
+        const soundsVolumeText = this.add.text(
+            settingsBoxX,
+            soundsSliderY + 30,
+            `${Math.round(currentSoundsVolume * 100)}%`,
+            {
+                fontSize: '20px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial, sans-serif'
+            }
+        ).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
+        
+        // Обробник перетягування
+        soundsSliderHandle.on('drag', (pointer, dragX) => {
+            const minX = settingsBoxX - sliderWidth / 2;
+            const maxX = settingsBoxX + sliderWidth / 2;
+            const clampedX = Phaser.Math.Clamp(dragX, minX, maxX);
+            
+            soundsSliderHandle.x = clampedX;
+            
+            const volume = (clampedX - minX) / sliderWidth;
+            soundsSliderFill.width = sliderWidth * volume;
+            soundsVolumeText.setText(`${Math.round(volume * 100)}%`);
+            
+            if (this.audioManager) {
+                this.audioManager.setSoundsVolume(volume);
+            }
+        });
+        
+        // Кнопка вимкнення/увімкнення звуків
+        const soundsToggleY = soundsSliderY + 70;
+        const isSoundsEnabled = this.audioManager ? this.audioManager.isSoundsEnabled() : true;
+        const soundsToggleButton = this.createPauseButton(
+            settingsBoxX,
+            soundsToggleY,
+            300,
+            50,
+            isSoundsEnabled ? '🔊 ЗВУКИ УВІМКНЕНІ' : '🔇 ЗВУКИ ВИМКНЕНІ',
+            () => {
+                if (this.audioManager) {
+                    const newState = !this.audioManager.isSoundsEnabled();
+                    this.audioManager.setSoundsEnabled(newState);
+                    
+                    // Оновлюємо текст кнопки
+                    if (soundsToggleButton.text) {
+                        soundsToggleButton.text.setText(newState ? '🔊 ЗВУКИ УВІМКНЕНІ' : '🔇 ЗВУКИ ВИМКНЕНІ');
+                    }
+                }
+            }
+        );
+        soundsToggleButton.setScrollFactor(0).setDepth(1003);
         
         // Кнопка "НАЗАД"
         const closeButton = this.createPauseButton(
             settingsBoxX,
-            settingsBoxY + 150,
+            settingsBoxY + 260,
             300,
             60,
             'НАЗАД',
@@ -434,7 +644,18 @@ class GameScene extends Phaser.Scene {
                 settingsShadow.destroy();
                 settingsBox.destroy();
                 title.destroy();
-                infoText.destroy();
+                musicLabel.destroy();
+                musicSliderBg.destroy();
+                musicSliderFill.destroy();
+                musicSliderHandle.destroy();
+                musicVolumeText.destroy();
+                musicToggleButton.destroy();
+                soundsLabel.destroy();
+                soundsSliderBg.destroy();
+                soundsSliderFill.destroy();
+                soundsSliderHandle.destroy();
+                soundsVolumeText.destroy();
+                soundsToggleButton.destroy();
                 if (closeButton) {
                     closeButton.destroy();
                 }
@@ -2011,6 +2232,11 @@ class GameScene extends Phaser.Scene {
     handleGameOver() {
         // runMoney НЕ додається в банк (гроші згорають)
         // Обміняні гроші вже додані через обмінники
+        
+        // Зупиняємо музику
+        if (this.audioManager) {
+            this.audioManager.stopMusic();
+        }
         
         // Отримуємо поточний баланс банку та обчислюємо скільки додали за гру
         const currentBankedMoney = this.saveSystem.getBankedMoney();

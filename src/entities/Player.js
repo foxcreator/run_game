@@ -91,6 +91,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.isFalling = false; // Стан падіння (коли авто збиває)
         this.fallTimer = 0; // Таймер падіння
         this.fallDuration = 1000; // Тривалість анімації падіння (мс)
+        
+        // Audio manager для звукових ефектів
+        this.audioManager = null;
     }
     
     createVisuals(scene) {
@@ -173,7 +176,16 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         // fall_1 показується 200мс, fall_2 - решту часу (fallDuration - 200мс)
     }
     
+    setAudioManager(audioManager) {
+        this.audioManager = audioManager;
+    }
+    
     update(time, delta) {
+        // ТЕСТ: перевірка чи код виконується
+        if (Math.random() < 0.01) { // Лог раз на 100 фреймів щоб не спамити
+            console.log('✅ Player.update() працює! isMoving:', this.isMoving, 'audioManager:', !!this.audioManager);
+        }
+        
         // Оновлення таймерів
         this.updateTimers(delta);
         
@@ -183,8 +195,39 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         // Обробка руху
         this.handleMovement(delta);
         
+        // Оновлення звуків
+        this.updateSounds();
+        
         // Оновлення візуалізації
         this.updateVisuals();
+    }
+    
+    updateSounds() {
+        if (!this.audioManager) {
+            console.warn('⚠️ Player: audioManager не встановлено');
+            return;
+        }
+        
+        // Звук бігу відтворюється тільки коли гравець рухається
+        // і не падає, не заморожений і не на ковзанні
+        const shouldPlayRunning = this.isMoving && 
+                                  !this.isFalling && 
+                                  !this.isFrozen && 
+                                  !this.isSliding;
+        
+        const isRunningPlaying = this.audioManager.isSoundPlaying('running');
+        
+        console.log(`🏃 Player sounds: isMoving=${this.isMoving}, shouldPlay=${shouldPlayRunning}, isPlaying=${isRunningPlaying}`);
+        
+        if (shouldPlayRunning && !isRunningPlaying) {
+            // Починаємо відтворювати звук бігу (loop)
+            console.log('▶️ Запускаю звук бігу');
+            this.audioManager.playSound('running', true);
+        } else if (!shouldPlayRunning && isRunningPlaying) {
+            // Зупиняємо звук бігу
+            console.log('⏹️ Зупиняю звук бігу');
+            this.audioManager.stopSound('running');
+        }
     }
     
     updateTimers(delta) {
