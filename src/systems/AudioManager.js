@@ -4,7 +4,7 @@ class AudioManager {
         this.scene = scene;
         
         // Список доступних музичних треків
-        this.musicTracks = ['back_1', 'back_2', 'back_3', 'back_4', 'back_5'];
+        this.musicTracks = ['back_1', 'back_2', 'back_3', 'back_4', 'back_5', 'back_6', 'back_7', 'back_8'];
         
         // Поточний та наступний трек (для crossfade)
         this.currentTrack = null;

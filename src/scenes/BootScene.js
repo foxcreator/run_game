@@ -140,6 +140,9 @@ class BootScene extends Phaser.Scene {
         this.load.audio('back_3', './src/assets/music/back_3.mp3');
         this.load.audio('back_4', './src/assets/music/back_4.mp3');
         this.load.audio('back_5', './src/assets/music/back_5.mp3');
+        this.load.audio('back_6', './src/assets/music/back_6.mp3');
+        this.load.audio('back_7', './src/assets/music/back_7.mp3');
+        this.load.audio('back_8', './src/assets/music/back_8.mp3');
         this.load.audio('gameover', './src/assets/music/gameover.mp3');
         
         // Завантажуємо звукові ефекти
