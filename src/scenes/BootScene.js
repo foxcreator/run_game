@@ -65,6 +65,9 @@ class BootScene extends Phaser.Scene {
         // Завантажуємо текстуру скутера
         this.load.image('scooter', './src/assets/textures/pickups/scooter.png');
         
+        // Завантажуємо текстуру хмарки
+        this.load.image('cloud', './src/assets/textures/pickups/cloud.png');
+        
         // Завантажуємо текстуру обмінника
         this.load.image('exchange', './src/assets/textures/exchange.png');
         
@@ -148,6 +151,7 @@ class BootScene extends Phaser.Scene {
         // Завантажуємо звукові ефекти
         this.load.audio('running', './src/assets/sounds/running.mp3');
         this.load.audio('money', './src/assets/sounds/money.wav');
+        this.load.audio('pickup', './src/assets/sounds/pickup.mp3');
         this.load.audio('drink', './src/assets/sounds/Drink.wav');
         this.load.audio('exchange_sound', './src/assets/sounds/exchange.mp3'); // Змінено з 'exchange' на 'exchange_sound'
         this.load.audio('menu_hover', './src/assets/sounds/menu_hover.wav');
@@ -163,6 +167,11 @@ class BootScene extends Phaser.Scene {
         this.load.audio('engine_09', './src/assets/sounds/engine-sounds/motorseamless09.wav');
         this.load.audio('engine_11', './src/assets/sounds/engine-sounds/motorseamless11.wav');
         this.load.audio('engine_13', './src/assets/sounds/engine-sounds/motorseamless13.wav');
+        
+        // Завантажуємо амбієнтні звуки
+        this.load.audio('ambience_birds', './src/assets/sounds/ambience/birds.wav');
+        this.load.audio('ambience_wind', './src/assets/sounds/ambience/wind.wav');
+        this.load.audio('ambience_river', './src/assets/sounds/ambience/river.wav');
         
         // Обробка помилок завантаження
         this.load.on('loaderror', (file) => {

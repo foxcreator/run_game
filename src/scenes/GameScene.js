@@ -192,6 +192,9 @@ class GameScene extends Phaser.Scene {
         const sirenConfig = GAME_CONFIG.AUDIO.POLICE_SIREN;
         this.nextSirenTime = this.time.now + Phaser.Math.Between(sirenConfig.MIN_INTERVAL, sirenConfig.MAX_INTERVAL);
         
+        // Запускаємо амбієнтні звуки
+        this.initAmbienceSounds();
+        
         // Гроші за забіг
         this.runMoney = 0;
         
@@ -201,6 +204,10 @@ class GameScene extends Phaser.Scene {
         // Таймер для процедурного спавну пікапів
         this.pickupSpawnTimer = 0;
         this.pickupSpawnInterval = 1000; // Перевірка кожну секунду
+        
+        // Таймери респавну для бонусів
+        this.lastSmokeCloudPickupTime = 0; // Час останнього підбору хмарки
+        this.lastScooterPickupTime = 0;    // Час останнього підбору скутера
         
         // Спавн початкових пікапів (монети та бонуси)
         this.spawnPickups();
@@ -408,9 +415,13 @@ class GameScene extends Phaser.Scene {
         
         // Hover ефект
         button.on('pointerover', () => {
-            // Відтворюємо звук наведення
+            // Зупиняємо попередній hover звук якщо він грає
             if (this.audioManager) {
-                this.audioManager.playSound('menu_hover', false);
+                const existingHover = this.audioManager.getSound('menu_hover_current');
+                if (existingHover && existingHover.isPlaying) {
+                    existingHover.stop();
+                }
+                this.audioManager.playSound('menu_hover_current', false, null, 'menu_hover');
             }
             button.setFillStyle(0x707070);
             buttonContainer.setScale(1.05);
@@ -572,7 +583,11 @@ class GameScene extends Phaser.Scene {
         
         musicToggleIcon.on('pointerover', () => {
             if (this.audioManager) {
-                this.audioManager.playSound('menu_hover', false);
+                const existingHover = this.audioManager.getSound('menu_hover_current');
+                if (existingHover && existingHover.isPlaying) {
+                    existingHover.stop();
+                }
+                this.audioManager.playSound('menu_hover_current', false, null, 'menu_hover');
             }
         });
         
@@ -668,7 +683,11 @@ class GameScene extends Phaser.Scene {
         
         soundsToggleIcon.on('pointerover', () => {
             if (this.audioManager) {
-                this.audioManager.playSound('menu_hover', false);
+                const existingHover = this.audioManager.getSound('menu_hover_current');
+                if (existingHover && existingHover.isPlaying) {
+                    existingHover.stop();
+                }
+                this.audioManager.playSound('menu_hover_current', false, null, 'menu_hover');
             }
         });
         
@@ -717,7 +736,7 @@ class GameScene extends Phaser.Scene {
     }
     
     closeSettingsMenu() {
-        // Закриваємо меню налаштувань
+                // Закриваємо меню налаштувань
         if (this.settingsMenuElements) {
             Object.values(this.settingsMenuElements).forEach(element => {
                 if (element && element.destroy) {
@@ -727,10 +746,10 @@ class GameScene extends Phaser.Scene {
             this.settingsMenuElements = null;
         }
         
-        // Показуємо меню паузи знову (overlay залишається видимим)
-        if (this.pauseMenu) {
-            this.pauseMenu.setVisible(true);
-        }
+                // Показуємо меню паузи знову (overlay залишається видимим)
+                if (this.pauseMenu) {
+                    this.pauseMenu.setVisible(true);
+                }
         
         // Знімаємо прапорець що ми в налаштуваннях
         this.inSettingsMenu = false;
@@ -1200,8 +1219,20 @@ class GameScene extends Phaser.Scene {
         }
         // Якщо це бонус
         else if (pickup.applyEffect) {
+            // Відтворюємо звук підбору бонуса
+            if (this.audioManager && this.cache.audio.exists('pickup')) {
+                this.audioManager.playSound('pickup_bonus', false, 0.6, 'pickup');
+            }
+            
             // Застосовуємо ефект бонусу
             pickup.applyEffect(player, this);
+            
+            // Зберігаємо час підбору для затримки респавну
+            if (pickup.bonusType === 'SMOKE_CLOUD') {
+                this.lastSmokeCloudPickupTime = this.time.now;
+            } else if (pickup.bonusType === 'SCOOTER') {
+                this.lastScooterPickupTime = this.time.now;
+            }
             
             // Видаляємо бонус
             pickup.collect();
@@ -1481,6 +1512,9 @@ class GameScene extends Phaser.Scene {
         
         // Перевірка поліцейської сирени
         this.checkPoliceSiren(time);
+        
+        // Оновлення звуку річки (на основі близькості до води)
+        this.updateRiverSound();
         
         // Оновлення таймера виживання
         this.timeSurvived += delta / 1000; // в секундах
@@ -2066,14 +2100,14 @@ class GameScene extends Phaser.Scene {
             this.spawnCoin();
         }
         
-        // Спавн скутерів (мінімальна кількість)
-        const scooterCount = config.SCOOTER.MIN_COUNT_ON_MAP;
+        // Спавн скутерів (максимальна кількість, щоб розкинулись по карті)
+        const scooterCount = config.SCOOTER.MAX_COUNT_ON_MAP;
         for (let i = 0; i < scooterCount; i++) {
             this.spawnScooter();
         }
         
-        // Спавн димових хмарок (мінімальна кількість)
-        const smokeCount = config.SMOKE_CLOUD.MIN_COUNT_ON_MAP;
+        // Спавн димових хмарок (максимальна кількість, щоб розкинулись по карті)
+        const smokeCount = config.SMOKE_CLOUD.MAX_COUNT_ON_MAP;
         for (let i = 0; i < smokeCount; i++) {
             this.spawnSmokeCloud();
         }
@@ -2207,7 +2241,7 @@ class GameScene extends Phaser.Scene {
             for (const pickup of this.pickups) {
                 if (pickup && pickup.active) {
                     const distance = Phaser.Math.Distance.Between(x, y, pickup.x, pickup.y);
-                    const minDistance = (pickup.bonusType === 'SCOOTER' || pickup.bonusType === 'SMOKE') 
+                    const minDistance = (pickup.bonusType === 'SCOOTER' || pickup.bonusType === 'SMOKE_CLOUD') 
                         ? config.MIN_DISTANCE_BETWEEN 
                         : 50;
                     
@@ -2279,7 +2313,7 @@ class GameScene extends Phaser.Scene {
             for (const pickup of this.pickups) {
                 if (pickup && pickup.active) {
                     const distance = Phaser.Math.Distance.Between(x, y, pickup.x, pickup.y);
-                    const minDistance = (pickup.bonusType === 'SCOOTER' || pickup.bonusType === 'SMOKE') 
+                    const minDistance = (pickup.bonusType === 'SCOOTER' || pickup.bonusType === 'SMOKE_CLOUD') 
                         ? config.MIN_DISTANCE_BETWEEN 
                         : 50;
                     
@@ -2335,7 +2369,7 @@ class GameScene extends Phaser.Scene {
         // Підраховуємо активні монети, скутери та димові хмарки
         const activeCoins = this.pickups.filter(p => p instanceof Coin && p.active);
         const activeScooters = this.pickups.filter(p => p.active && p.bonusType === 'SCOOTER');
-        const activeSmokeClouds = this.pickups.filter(p => p.active && p.bonusType === 'SMOKE');
+        const activeSmokeClouds = this.pickups.filter(p => p.active && p.bonusType === 'SMOKE_CLOUD');
         
         // Підтримуємо монети (максимум з конфігу)
         const maxCoins = config.COINS.MAX_COUNT_ON_MAP;
@@ -2358,9 +2392,15 @@ class GameScene extends Phaser.Scene {
         // Підтримуємо димові хмарки (максимум з конфігу)
         const maxSmokeClouds = config.SMOKE_CLOUD.MAX_COUNT_ON_MAP;
         if (activeSmokeClouds.length < maxSmokeClouds) {
-            const needed = maxSmokeClouds - activeSmokeClouds.length;
-            for (let i = 0; i < needed; i++) {
+            // Перевіряємо чи пройшла затримка з моменту останнього підбору/спавну
+            const timeSinceLastPickup = this.time.now - this.lastSmokeCloudPickupTime;
+            const respawnDelay = config.SMOKE_CLOUD.RESPAWN_DELAY;
+            
+            // Якщо затримка пройшла або це перший спавн - спавнимо ОДНУ хмарку
+            if (timeSinceLastPickup >= respawnDelay || this.lastSmokeCloudPickupTime === 0) {
                 this.spawnSmokeCloud();
+                // Оновлюємо час для наступного спавну
+                this.lastSmokeCloudPickupTime = this.time.now;
             }
         }
     }
@@ -2403,6 +2443,102 @@ class GameScene extends Phaser.Scene {
             // Якщо ворогів недостатньо - перевіримо через 10 секунд
             this.nextSirenTime = time + 10000;
         }
+    }
+    
+    /**
+     * Ініціалізує амбієнтні звуки
+     */
+    initAmbienceSounds() {
+        if (!this.sound) return;
+        
+        const ambienceConfig = GAME_CONFIG.AUDIO.AMBIENCE;
+        
+        // Звук птахів - постійно грає
+        if (this.cache.audio.exists('ambience_birds')) {
+            this.ambienceBirds = this.sound.add('ambience_birds', {
+                volume: ambienceConfig.BIRDS_VOLUME,
+                loop: true
+            });
+            this.ambienceBirds.play();
+        }
+        
+        // Звук вітру - постійно грає
+        if (this.cache.audio.exists('ambience_wind')) {
+            this.ambienceWind = this.sound.add('ambience_wind', {
+                volume: ambienceConfig.WIND_VOLUME,
+                loop: true
+            });
+            this.ambienceWind.play();
+        }
+        
+        // Звук річки - грає з динамічною гучністю
+        if (this.cache.audio.exists('ambience_river')) {
+            this.ambienceRiver = this.sound.add('ambience_river', {
+                volume: 0,
+                loop: true
+            });
+            this.ambienceRiver.play();
+        }
+    }
+    
+    /**
+     * Зупиняє амбієнтні звуки
+     */
+    stopAmbienceSounds() {
+        if (this.ambienceBirds) {
+            this.ambienceBirds.stop();
+        }
+        if (this.ambienceWind) {
+            this.ambienceWind.stop();
+        }
+        if (this.ambienceRiver) {
+            this.ambienceRiver.stop();
+        }
+    }
+    
+    /**
+     * Оновлює гучність звуку річки на основі близькості до води
+     */
+    updateRiverSound() {
+        if (!this.ambienceRiver || !this.player || !this.tilemap) return;
+        
+        const ambienceConfig = GAME_CONFIG.AUDIO.AMBIENCE;
+        
+        // Отримуємо позицію гравця в пікселях карти колізій
+        const collisionMapX = Math.floor(this.player.x);
+        const collisionMapY = Math.floor(this.player.y);
+        
+        // Шукаємо найближчий синій піксель (вода) в радіусі
+        const searchRadius = ambienceConfig.RIVER_MAX_DISTANCE;
+        let closestWaterDistance = Infinity;
+        
+        // Перевіряємо пікселі навколо гравця (оптимізовано - кожні 16 пікселів)
+        for (let dx = -searchRadius; dx <= searchRadius; dx += 16) {
+            for (let dy = -searchRadius; dy <= searchRadius; dy += 16) {
+                const checkX = collisionMapX + dx;
+                const checkY = collisionMapY + dy;
+                
+                // Перевіряємо чи це вода (синій колір на карті колізій)
+                if (this.tilemap.isWater && this.tilemap.isWater(checkX, checkY)) {
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < closestWaterDistance) {
+                        closestWaterDistance = distance;
+                    }
+                }
+            }
+        }
+        
+        // Обчислюємо гучність на основі відстані до води
+        let volume = 0;
+        if (closestWaterDistance < ambienceConfig.RIVER_MIN_DISTANCE) {
+            volume = ambienceConfig.RIVER_MAX_VOLUME;
+        } else if (closestWaterDistance < ambienceConfig.RIVER_MAX_DISTANCE) {
+            const ratio = (ambienceConfig.RIVER_MAX_DISTANCE - closestWaterDistance) / 
+                         (ambienceConfig.RIVER_MAX_DISTANCE - ambienceConfig.RIVER_MIN_DISTANCE);
+            volume = ambienceConfig.RIVER_MAX_VOLUME * ratio;
+        }
+        
+        this.ambienceRiver.setVolume(volume);
     }
     
     /**
@@ -2465,21 +2601,67 @@ class GameScene extends Phaser.Scene {
         // runMoney НЕ додається в банк (гроші згорають)
         // Обміняні гроші вже додані через обмінники
         
-        // Зупиняємо музику
+        // Зупиняємо звук гравця
+        if (this.player && this.player.audioManager) {
+            const runningSound = this.player.audioManager.getSound('running');
+            if (runningSound) {
+                runningSound.stop();
+            }
+        }
+        
+        // Зупиняємо всю музику та звуки
         if (this.audioManager) {
             this.audioManager.stopMusic();
+            
+            // Зупиняємо всі звуки через audioManager
+            for (const soundKey in this.audioManager.sounds) {
+                const sound = this.audioManager.sounds[soundKey];
+                if (sound && sound.isPlaying) {
+                    sound.stop();
+                }
+            }
+        }
+        
+        // Зупиняємо амбієнтні звуки
+        this.stopAmbienceSounds();
+        
+        // Зупиняємо звуки двигунів автомобілів
+        if (this.obstacles) {
+            for (const obstacle of this.obstacles) {
+                if (obstacle && obstacle.engineSound) {
+                    obstacle.engineSound.stop();
+                }
+            }
+        }
+        
+        // Зупиняємо звуки ворогів
+        if (this.chasers) {
+            for (const chaser of this.chasers) {
+                if (chaser && chaser.audioManager) {
+                    const chaserSound = chaser.audioManager.getSound(chaser.soundId);
+                    if (chaserSound) {
+                        chaserSound.stop();
+                    }
+                }
+            }
         }
         
         // Отримуємо поточний баланс банку та обчислюємо скільки додали за гру
         const currentBankedMoney = this.saveSystem.getBankedMoney();
         const moneyAddedThisGame = currentBankedMoney - (this.initialBankedMoney || 0);
         
-        // Перехід до ResultScene з даними
-        this.scene.start('ResultScene', {
+        // Зберігаємо дані для передачі
+        const resultData = {
             currentBankedMoney: currentBankedMoney,
             moneyAddedThisGame: moneyAddedThisGame,
             timeSurvived: this.timeSurvived
-        });
+        };
+        
+        // ВАЖЛИВО: зупиняємо поточну сцену перед запуском нової
+        this.scene.stop('GameScene');
+        
+        // Перехід до ResultScene з даними
+        this.scene.start('ResultScene', resultData);
     }
     
     shutdown() {

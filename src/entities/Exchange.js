@@ -127,7 +127,7 @@ class Exchange extends Phaser.GameObjects.Image {
         const { width, height } = scene.cameras.main;
         
         // Створюємо текст повідомлення
-        const messageText = `Ви поміняли ${uahExchanged.toLocaleString()} грн\nНа ваш криптокошелек зараховано $${usdReceived.toLocaleString()}`;
+        const messageText = `Ви поміняли ${uahExchanged.toLocaleString()} грн\nНа ваш криптогаманець зараховано $${usdReceived.toLocaleString()}`;
         
         // Якщо є залишок - додаємо інформацію про нього
         const fullMessage = remainder > 0 

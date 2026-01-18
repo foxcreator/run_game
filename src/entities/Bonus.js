@@ -28,7 +28,17 @@ class Bonus extends Phaser.GameObjects.Container {
             visual = scene.add.image(0, 0, 'scooter');
             visual.setDisplaySize(width, height);
             visual.setOrigin(0.5);
-        } else {
+        }
+        // Для SMOKE_CLOUD використовуємо текстуру
+        else if (bonusType === 'SMOKE_CLOUD' && scene.textures.exists('cloud')) {
+            const width = GAME_CONFIG.PICKUPS.SMOKE_CLOUD.WIDTH;
+            const height = GAME_CONFIG.PICKUPS.SMOKE_CLOUD.HEIGHT;
+            
+            visual = scene.add.image(0, 0, 'cloud');
+            visual.setDisplaySize(width, height);
+            visual.setOrigin(0.5);
+        }
+        else {
             // Для інших бонусів використовуємо кольорові прямокутники
             const size = config.width || 20;
             const color = config.type === 'color' ? config.value : 0x00ff00;

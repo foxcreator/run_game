@@ -962,6 +962,47 @@ class TilemapSystem {
         return false;
     }
     
+    /**
+     * Перевіряє чи є піксель водою (синій колір на карті колізій)
+     */
+    isWater(worldX, worldY) {
+        if (!this.scene || !this.scene.textures.exists('collision_map')) {
+            return false;
+        }
+        
+        // Перевіряємо межі
+        if (worldX < 0 || worldX >= this.worldWidth || worldY < 0 || worldY >= this.worldHeight) {
+            return false;
+        }
+        
+        // Отримуємо текстуру карти колізій
+        const texture = this.scene.textures.get('collision_map');
+        const canvas = texture.getSourceImage();
+        
+        // Створюємо canvas для отримання даних пікселів (кешуємо)
+        if (!this.collisionMapCanvas) {
+            this.collisionMapCanvas = document.createElement('canvas');
+            this.collisionMapCanvas.width = canvas.width;
+            this.collisionMapCanvas.height = canvas.height;
+            const ctx = this.collisionMapCanvas.getContext('2d');
+            ctx.drawImage(canvas, 0, 0);
+            this.collisionMapImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        }
+        
+        // Конвертуємо світові координати в координати текстури
+        const pixelX = Math.floor((worldX / this.worldWidth) * this.collisionMapCanvas.width);
+        const pixelY = Math.floor((worldY / this.worldHeight) * this.collisionMapCanvas.height);
+        
+        // Отримуємо колір пікселя
+        const index = (pixelY * this.collisionMapCanvas.width + pixelX) * 4;
+        const r = this.collisionMapImageData.data[index];
+        const g = this.collisionMapImageData.data[index + 1];
+        const b = this.collisionMapImageData.data[index + 2];
+        
+        // Вода - синій колір (високе значення B, низькі R і G)
+        return b > 150 && b > r && b > g;
+    }
+    
     // Перевірка чи область (кілька тайлів) є дорогою або тротуаром
     isAreaRoadOrSidewalk(worldX, worldY, sizeInTiles) {
         const startTileX = Math.floor(worldX / this.tileSize);

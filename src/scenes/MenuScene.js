@@ -223,9 +223,14 @@ class MenuScene extends Phaser.Scene {
 
         // Hover ефект - включаємо текст в анімацію
         button.on('pointerover', () => {
-            // Відтворюємо звук наведення
+            // Зупиняємо попередній hover звук якщо він грає
             if (this.audioManager) {
-                this.audioManager.playSound('menu_hover', false);
+                const existingHover = this.audioManager.getSound('menu_hover_current');
+                if (existingHover && existingHover.isPlaying) {
+                    existingHover.stop();
+                }
+                // Відтворюємо новий звук
+                this.audioManager.playSound('menu_hover_current', false, null, 'menu_hover');
             }
             
             button.setFillStyle(0x707070); // Світліший сірий
@@ -417,7 +422,11 @@ class MenuScene extends Phaser.Scene {
         
         musicToggleIcon.on('pointerover', () => {
             if (this.audioManager) {
-                this.audioManager.playSound('menu_hover', false);
+                const existingHover = this.audioManager.getSound('menu_hover_current');
+                if (existingHover && existingHover.isPlaying) {
+                    existingHover.stop();
+                }
+                this.audioManager.playSound('menu_hover_current', false, null, 'menu_hover');
             }
         });
         
@@ -513,7 +522,11 @@ class MenuScene extends Phaser.Scene {
         
         soundsToggleIcon.on('pointerover', () => {
             if (this.audioManager) {
-                this.audioManager.playSound('menu_hover', false);
+                const existingHover = this.audioManager.getSound('menu_hover_current');
+                if (existingHover && existingHover.isPlaying) {
+                    existingHover.stop();
+                }
+                this.audioManager.playSound('menu_hover_current', false, null, 'menu_hover');
             }
         });
         
@@ -592,8 +605,8 @@ class MenuScene extends Phaser.Scene {
             .setInteractive();
 
         // Вікно інформації - сірий прямокутник в стилі меню
-        const aboutWidth = 650;
-        const aboutHeight = 480;
+        const aboutWidth = 700;
+        const aboutHeight = 580;
         const aboutBoxX = width / 2;
         const aboutBoxY = height / 2;
         
@@ -619,55 +632,126 @@ class MenuScene extends Phaser.Scene {
         .setStrokeStyle(3, 0x606060);
 
         // Заголовок
-        const title = this.add.text(aboutBoxX, aboutBoxY - 180, 'ПРО ГРУ', {
-            fontSize: '42px',
+        const title = this.add.text(aboutBoxX, aboutBoxY - aboutHeight/2 + 30, '🏃 ПРО ГРУ', {
+            fontSize: '28px',
             fill: '#0057B7',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
             stroke: '#FFD700',
-            strokeThickness: 6
+            strokeThickness: 3
         }).setOrigin(0.5).setDepth(102);
 
-        // Текст інформації
-        const aboutText = `ВТЕЧА ВІД ТЦК
+        // Темний фон для контенту
+        const contentBgWidth = aboutWidth - 80;
+        const contentBgHeight = aboutHeight - 150;
+        const contentBg = this.add.rectangle(
+            aboutBoxX,
+            aboutBoxY + 10,
+            contentBgWidth,
+            contentBgHeight,
+            0x000000,
+            0.3
+        ).setDepth(101);
 
-Endless chase гра у стилі pixel art.
+        // DOM елемент з текстом і скролом - трохи менше за Rectangle щоб вміститись всередині
+        const contentHtml = `
+        <div style="
+            width: ${contentBgWidth - 10}px;
+            height: ${contentBgHeight - 10}px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 12px;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #FFFFFF;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            box-sizing: border-box;
+            scrollbar-width: thin;
+            scrollbar-color: #FFD700 rgba(255,255,255,0.2);
+            word-wrap: break-word;
+        ">
+            <p style="margin: 0 0 12px 0; color: #FFD700; font-size: 16px; font-weight: bold; word-wrap: break-word;">🎯 МЕТА</p>
+            <p style="margin: 0 0 12px 0; word-wrap: break-word;">Втікайте від переслідувачів, збирайте гроші та обмінюйте їх на долари в обмінниках.<br><strong>Протримайтесь якомога довше та зберіть 20000$!</strong></p>
+            
+            <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold; word-wrap: break-word;">⌨️ УПРАВЛІННЯ</p>
+            <p style="margin: 0 0 12px 0; word-wrap: break-word;">
+                • WASD / Стрілки — рух<br>
+                • Space — підслизнення під стрічками<br>
+                • ESC — пауза
+            </p>
+            
+            <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold; word-wrap: break-word;">💰 ГРОШІ</p>
+            <p style="margin: 0 0 12px 0; word-wrap: break-word;">
+                • Збирайте гроші (10₴, 20₴, 50₴, 100₴)<br>
+                • Обмінюйте в обмінниках (43₴ = 1$)<br>
+                • ⚠️ <strong>Необмінені гривні згорають</strong> після програшу!
+            </p>
+            
+            <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold; word-wrap: break-word;">👹 ВОРОГИ</p>
+            <p style="margin: 0 0 12px 0; word-wrap: break-word;">
+                • З документами — блокують шлях, повільно заповнюють шкалу<br>
+                • З дубинками — б'ють вас, швидко заповнюють шкалу<br>
+                • ☠️ <strong>Червона шкала = 100% → Програш</strong>
+            </p>
+            
+            <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold; word-wrap: break-word;">🎁 БОНУСИ</p>
+            <p style="margin: 0 0 12px 0; word-wrap: break-word;">
+                • 🛴 Скутер — +швидкість на 2 сек<br>
+                • ☁️ Хмарка — заморожує всіх ворогів на 1.5 сек<br>
+                • 🏪 Кіоск — відновлює стаміну
+            </p>
+            
+            <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold; word-wrap: break-word;">💡 ПОРАДИ</p>
+            <p style="margin: 0 0 12px 0; word-wrap: break-word;">
+                1. Слідкуйте за стаміною — не витрачайте всю!<br>
+                2. Обмінюйте гроші часто — не ризикуйте<br>
+                3. Використовуйте ривок для втечі<br>
+                4. Хмарка рятує в критичні моменти
+            </p>
+            
+            <p style="text-align: center; margin: 15px 0 0 0; font-size: 16px; color: #FFD700;">
+                <strong>Удачі у втечі! 🏃💨</strong>
+            </p>
+        </div>
+        
+        <style>
+            div::-webkit-scrollbar {
+                width: 8px;
+            }
+            div::-webkit-scrollbar-track {
+                background: rgba(255,255,255,0.1);
+                border-radius: 4px;
+            }
+            div::-webkit-scrollbar-thumb {
+                background: #FFD700;
+                border-radius: 4px;
+            }
+            div::-webkit-scrollbar-thumb:hover {
+                background: #FFA500;
+            }
+        </style>
+        `;
 
-Мета: втекти від переслідувачів, збирати гроші та вижити якнайдовше.
-
-Особливості:
-• Динамічний геймплей з ривками та стаміною
-• Процедурна генерація перешкод
-• Система апгрейдів та мета-прогресу
-• Підтримка ЗСУ через донат
-
-Гра створена в розважальних цілях.`;
-
-        const infoText = this.add.text(aboutBoxX, aboutBoxY - 20, aboutText, {
-            fontSize: '18px',
-            fill: '#FFFFFF',
-            fontFamily: 'Arial, sans-serif',
-            align: 'center',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 2,
-            wordWrap: { width: aboutWidth - 80 },
-            lineSpacing: 10
-        }).setOrigin(0.5).setDepth(102);
+        const contentElement = this.add.dom(aboutBoxX, aboutBoxY + 10, 'div').createFromHTML(contentHtml);
+        contentElement.setOrigin(0.5);
+        contentElement.setDepth(102);
 
         // Кнопка закриття
         const closeButton = this.createMenuButton(
             aboutBoxX,
-            aboutBoxY + 180,
-            220,
-            55,
+            aboutBoxY + aboutHeight/2 - 35,
+            200,
+            50,
             'ЗАКРИТИ',
             () => {
                 overlay.destroy();
                 aboutShadow.destroy();
                 aboutBox.destroy();
+                contentBg.destroy();
                 title.destroy();
-                infoText.destroy();
+                contentElement.destroy();
                 closeButton.destroy();
                 closeButton.shadow.destroy();
                 closeButton.text.destroy();
@@ -682,8 +766,9 @@ Endless chase гра у стилі pixel art.
             overlay.destroy();
             aboutShadow.destroy();
             aboutBox.destroy();
+            contentBg.destroy();
             title.destroy();
-            infoText.destroy();
+            contentElement.destroy();
             closeButton.destroy();
             closeButton.shadow.destroy();
             closeButton.text.destroy();
