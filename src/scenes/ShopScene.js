@@ -112,6 +112,9 @@ class ShopScene extends Phaser.Scene {
 
         // Hover ефект
         button.on('pointerover', () => {
+            // Відтворюємо звук наведення
+            this.sound.play('menu_hover');
+            
             button.setFillStyle(0x707070);
             button.setScale(1.02);
             shadow.setScale(1.02);
@@ -140,6 +143,9 @@ class ShopScene extends Phaser.Scene {
         });
 
         button.on('pointerdown', () => {
+            // Відтворюємо звук кліку
+            this.sound.play('menu_choise');
+            
             button.setScale(0.98);
             shadow.setScale(0.98);
             buttonText.setScale(0.98);

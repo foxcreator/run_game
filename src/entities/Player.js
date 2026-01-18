@@ -82,10 +82,6 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         // Дебафи керованості (для калюж)
         this.controlDebuffs = []; // Масив активних дебафів { multiplier, duration }
         
-        // Імунітет до SoftCrowd (для скутера)
-        this.immunityToSoftCrowd = false;
-        this.immunityToSoftCrowdTimer = 0;
-        
         // Анімації та напрямок
         this.lastDirection = 'front'; // Останній напрямок руху (front, rear, left, right)
         this.isFalling = false; // Стан падіння (коли авто збиває)
@@ -94,6 +90,7 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         
         // Audio manager для звукових ефектів
         this.audioManager = null;
+        this.currentFreezeSound = null; // Зберігає який звук заморозки зараз грає
     }
     
     createVisuals(scene) {
@@ -181,11 +178,6 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     }
     
     update(time, delta) {
-        // ТЕСТ: перевірка чи код виконується
-        if (Math.random() < 0.01) { // Лог раз на 100 фреймів щоб не спамити
-            console.log('✅ Player.update() працює! isMoving:', this.isMoving, 'audioManager:', !!this.audioManager);
-        }
-        
         // Оновлення таймерів
         this.updateTimers(delta);
         
@@ -204,7 +196,6 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     
     updateSounds() {
         if (!this.audioManager) {
-            console.warn('⚠️ Player: audioManager не встановлено');
             return;
         }
         
@@ -217,16 +208,30 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         
         const isRunningPlaying = this.audioManager.isSoundPlaying('running');
         
-        console.log(`🏃 Player sounds: isMoving=${this.isMoving}, shouldPlay=${shouldPlayRunning}, isPlaying=${isRunningPlaying}`);
-        
         if (shouldPlayRunning && !isRunningPlaying) {
             // Починаємо відтворювати звук бігу (loop)
-            console.log('▶️ Запускаю звук бігу');
             this.audioManager.playSound('running', true);
         } else if (!shouldPlayRunning && isRunningPlaying) {
             // Зупиняємо звук бігу
-            console.log('⏹️ Зупиняю звук бігу');
             this.audioManager.stopSound('running');
+        }
+        
+        // Якщо звук грає - змінюємо його швидкість залежно від швидкості гравця
+        if (isRunningPlaying) {
+            const runningSound = this.audioManager.getSound('running');
+            if (runningSound) {
+                // Обчислюємо rate на основі поточної швидкості
+                // baseSpeed = 100% швидкості → rate 1.0
+                // currentSpeed більше → rate більше (швидший звук)
+                // currentSpeed менше → rate менше (повільніший звук)
+                const speedRatio = this.currentSpeed / this.baseSpeed;
+                
+                // Обмежуємо діапазон rate від 0.7 до 1.5 для природності
+                const rate = Phaser.Math.Clamp(speedRatio, 0.7, 1.5);
+                
+                // Застосовуємо rate
+                runningSound.setRate(rate);
+            }
         }
     }
     
@@ -272,12 +277,19 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             }
         }
         
-        // Frozen стан (при зіткненні з кіоском)
+        // Frozen стан (при зіткненні з кіоском/обмінником)
         if (this.isFrozen) {
             this.frozenTimer -= delta;
             if (this.frozenTimer <= 0) {
                 this.isFrozen = false;
                 this.frozenPosition = null; // Очищаємо позицію
+                
+                // Зупиняємо звук заморозки (якщо він грав)
+                if (this.currentFreezeSound && this.audioManager) {
+                    this.audioManager.stopSound(this.currentFreezeSound);
+                    this.currentFreezeSound = null;
+                }
+                
                 // Після заморозки потрібно відштовхнути гравця від кіоска
                 // Це буде зроблено в GameScene.checkTilemapCollisions()
             }
@@ -300,9 +312,6 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         
         // Оновлення бафів швидкості
         this.updateSpeedBuffs(delta);
-        
-        // Оновлення імунітетів
-        this.updateImmunities(delta);
     }
     
     updateSpeedDebuffs(delta) {
@@ -327,17 +336,6 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             if (buff.duration <= 0) {
                 // Баф закінчився - видаляємо
                 this.speedBuffs.splice(i, 1);
-            }
-        }
-    }
-    
-    updateImmunities(delta) {
-        // Оновлюємо таймер імунітету до SoftCrowd
-        if (this.immunityToSoftCrowdTimer > 0) {
-            this.immunityToSoftCrowdTimer -= delta;
-            if (this.immunityToSoftCrowdTimer <= 0) {
-                this.immunityToSoftCrowd = false;
-                this.immunityToSoftCrowdTimer = 0;
             }
         }
     }
@@ -534,7 +532,7 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         }
     }
     
-    freeze(duration = 2000) {
+    freeze(duration = 2000, freezeSound = null) {
         // Заморожуємо гравця на вказаний час
         if (this.isFrozen) return; // Вже заморожений
         
@@ -542,6 +540,14 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.frozenTimer = duration;
         this.frozenPosition = { x: this.x, y: this.y }; // Зберігаємо позицію
         this.setVelocity(0, 0); // Зупиняємо рух
+        
+        // Відтворюємо звук заморозки (якщо переданий)
+        if (freezeSound && this.audioManager) {
+            this.audioManager.playSound(freezeSound, true);
+            this.currentFreezeSound = freezeSound; // Зберігаємо який звук грає
+        } else {
+            this.currentFreezeSound = null;
+        }
     }
     
     getFrozenPosition() {
@@ -677,6 +683,12 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.isFalling = true;
         this.fallTimer = this.fallDuration;
         this.setVelocity(0, 0); // Зупиняємо рух під час падіння
+        
+        // Зупиняємо звук заморозки якщо він грає (при падінні freeze скасовується)
+        if (this.currentFreezeSound && this.audioManager) {
+            this.audioManager.stopSound(this.currentFreezeSound);
+            this.currentFreezeSound = null;
+        }
     }
     
     // Геттери для HUD
@@ -743,23 +755,6 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             multiplier: multiplier,
             duration: duration
         });
-    }
-    
-    /**
-     * Додає імунітет до SoftCrowd
-     * @param {number} duration - Тривалість імунітету (мс)
-     */
-    addImmunityToSoftCrowd(duration) {
-        this.immunityToSoftCrowd = true;
-        this.immunityToSoftCrowdTimer = duration;
-    }
-    
-    /**
-     * Перевіряє чи гравець має імунітет до SoftCrowd
-     * @returns {boolean}
-     */
-    hasImmunityToSoftCrowd() {
-        return this.immunityToSoftCrowd && this.immunityToSoftCrowdTimer > 0;
     }
     
     destroy() {

@@ -9,10 +9,27 @@ class ResultScene extends Phaser.Scene {
         this.currentBankedMoney = data.currentBankedMoney || 0;
         this.moneyAddedThisGame = data.moneyAddedThisGame || 0;
         this.timeSurvived = data.timeSurvived || 0;
+        
+        // Музика Game Over
+        this.gameoverMusic = null;
     }
 
     create() {
         const { width, height } = this.cameras.main;
+        
+        // Відтворюємо музику Game Over (один раз, не loop)
+        if (this.sound.get('gameover')) {
+            this.gameoverMusic = this.sound.get('gameover');
+        } else {
+            this.gameoverMusic = this.sound.add('gameover', { 
+                volume: 0.5, 
+                loop: false 
+            });
+        }
+        this.gameoverMusic.play();
+        
+        // Додаємо обробник події shutdown для зупинки музики
+        this.events.once('shutdown', this.shutdown, this);
 
         // Фонове зображення для екрану закінчення гри
         const background = this.add.image(width / 2, height / 2, 'gameover_background');
@@ -120,6 +137,7 @@ class ResultScene extends Phaser.Scene {
             buttonHeight,
             'МАГАЗИН',
             () => {
+                this.stopGameoverMusic();
                 this.scene.start('ShopScene');
             }
         );
@@ -132,6 +150,7 @@ class ResultScene extends Phaser.Scene {
             buttonHeight,
             'МЕНЮ',
             () => {
+                this.stopGameoverMusic();
                 this.scene.start('MenuScene');
             }
         );
@@ -166,6 +185,9 @@ class ResultScene extends Phaser.Scene {
 
         // Hover ефект
         button.on('pointerover', () => {
+            // Відтворюємо звук наведення
+            this.sound.play('menu_hover');
+            
             button.setFillStyle(0x707070);
             button.setScale(1.02);
             shadow.setScale(1.02);
@@ -194,6 +216,9 @@ class ResultScene extends Phaser.Scene {
         });
 
         button.on('pointerdown', () => {
+            // Відтворюємо звук кліку
+            this.sound.play('menu_choise');
+            
             button.setScale(0.98);
             shadow.setScale(0.98);
             buttonText.setScale(0.98);
@@ -216,6 +241,17 @@ class ResultScene extends Phaser.Scene {
         button.text = buttonText;
 
         return button;
+    }
+    
+    stopGameoverMusic() {
+        if (this.gameoverMusic) {
+            this.gameoverMusic.stop();
+        }
+    }
+    
+    shutdown() {
+        // Зупиняємо музику при виході з сцени
+        this.stopGameoverMusic();
     }
 }
 

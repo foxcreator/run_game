@@ -46,7 +46,6 @@ class Minimap {
             this.background.setDepth(100);
             this.background.setStrokeStyle(2, 0xffffff, 1);
         } catch (error) {
-            console.error('Помилка створення фону міні-карти:', error);
         }
         
         // Графічний об'єкт для міні-карти
@@ -55,7 +54,6 @@ class Minimap {
             this.minimapGraphics.setScrollFactor(0);
             this.minimapGraphics.setDepth(101);
         } catch (error) {
-            console.error('Помилка створення graphics:', error);
         }
         
         // Змінна для зображення міні-карти (якщо використовуємо текстуру)
@@ -75,7 +73,6 @@ class Minimap {
             this.viewportIndicator.setScrollFactor(0);
             this.viewportIndicator.setDepth(102);
         } catch (error) {
-            console.error('Помилка створення viewport indicator:', error);
         }
         
         // Індикатор позиції гравця
@@ -84,13 +81,11 @@ class Minimap {
             this.playerIndicator.setScrollFactor(0);
             this.playerIndicator.setDepth(103);
         } catch (error) {
-            console.error('Помилка створення player indicator:', error);
         }
     }
     
     drawMap() {
         if (!this.minimapGraphics || !this.tilemap) {
-            console.error('Міні-карта: не можу малювати - відсутні дані');
             return;
         }
         
@@ -143,7 +138,6 @@ class Minimap {
             } else {
                 // Fallback: малюємо на основі collision map
                 if (!this.tilemap.collisionMap) {
-                    console.warn('Міні-карта: немає даних для відображення');
                     return;
                 }
                 
@@ -179,7 +173,6 @@ class Minimap {
             // Малюємо кіоски поверх карти (створюємо окремі спрайти)
             this.updateKioskIndicators();
         } catch (error) {
-            console.error('Помилка малювання міні-карти:', error);
         }
     }
     

@@ -1,8 +1,11 @@
 // Bonus - базовий клас для бонусів
 import spriteManager from '../utils/SpriteManager.js';
+import { GAME_CONFIG } from '../config/gameConfig.js';
 
-class Bonus extends Phaser.GameObjects.Rectangle {
+class Bonus extends Phaser.GameObjects.Container {
     constructor(scene, x, y, bonusType) {
+        super(scene, x, y);
+        
         const config = spriteManager.PICKUP_SPRITES[bonusType] || {
             type: 'color',
             value: 0x00ff00,
@@ -10,18 +13,32 @@ class Bonus extends Phaser.GameObjects.Rectangle {
             height: 20
         };
         
-        const size = config.width || 20;
-        const color = config.type === 'color' ? config.value : 0x00ff00;
-        
-        super(scene, x, y, size, size, color);
-        
+        this.bonusType = bonusType;
         scene.add.existing(this);
-        // НЕ ДОДАЄМО physics body - магнітний ефект працює напряму через this.x/this.y
-        
-        this.setOrigin(0.5);
         this.setDepth(3); // Бонуси поверх перешкод, але під гравцем
         
-        this.bonusType = bonusType; // 'SCOOTER', 'JOKE', 'SMOKE'
+        // Створюємо візуальний елемент
+        let visual;
+        
+        // Для SCOOTER використовуємо текстуру
+        if (bonusType === 'SCOOTER' && scene.textures.exists('scooter')) {
+            const width = GAME_CONFIG.PICKUPS.SCOOTER.WIDTH;
+            const height = GAME_CONFIG.PICKUPS.SCOOTER.HEIGHT;
+            
+            visual = scene.add.image(0, 0, 'scooter');
+            visual.setDisplaySize(width, height);
+            visual.setOrigin(0.5);
+        } else {
+            // Для інших бонусів використовуємо кольорові прямокутники
+            const size = config.width || 20;
+            const color = config.type === 'color' ? config.value : 0x00ff00;
+            
+            visual = scene.add.rectangle(0, 0, size, size, color);
+            visual.setOrigin(0.5);
+        }
+        
+        this.add(visual);
+        this.visual = visual;
         
         // Анімація обертання (опційно)
         this.rotationSpeed = 0.03;
@@ -35,8 +52,10 @@ class Bonus extends Phaser.GameObjects.Rectangle {
     update(delta, player) {
         if (!this.active || this.collected) return;
         
-        // Легке обертання для візуального ефекту
-        this.rotation += this.rotationSpeed;
+        // Легке обертання для візуального ефекту (обертаємо візуальний елемент)
+        if (this.visual) {
+            this.visual.rotation += this.rotationSpeed;
+        }
         
         // Магнітний ефект - притягування до гравця (ТОЧНО ЯК В COIN.JS)
         if (player && player.active) {

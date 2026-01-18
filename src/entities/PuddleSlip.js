@@ -38,7 +38,6 @@ class PuddleSlip extends Obstacle {
             this.setAlpha(0);
         } else {
             // Fallback: показуємо Rectangle якщо текстури немає
-            console.warn('⚠️ Текстура калюжі не знайдена:', textureKey, 'Використовую Rectangle');
             // Rectangle вже видимий за замовчуванням
             this.visualSprite = null;
         }

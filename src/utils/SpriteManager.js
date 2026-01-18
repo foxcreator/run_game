@@ -193,7 +193,6 @@ class SpriteManager {
     createTileSprite(scene, tileType, x, y) {
         const spriteConfig = this.TILE_SPRITES[tileType];
         if (!spriteConfig) {
-            console.warn(`Не знайдено конфігурацію для тайла: ${tileType}`);
             return null;
         }
 
@@ -272,7 +271,6 @@ class SpriteManager {
     createObstacleSprite(scene, obstacleType, x, y) {
         const config = this.OBSTACLE_SPRITES[obstacleType];
         if (!config) {
-            console.warn(`Не знайдено конфігурацію для перешкоди: ${obstacleType}`);
             return null;
         }
 
@@ -300,7 +298,6 @@ class SpriteManager {
     createPickupSprite(scene, pickupType, x, y) {
         const config = this.PICKUP_SPRITES[pickupType];
         if (!config) {
-            console.warn(`Не знайдено конфігурацію для пікапа: ${pickupType}`);
             return null;
         }
 

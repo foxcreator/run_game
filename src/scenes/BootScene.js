@@ -62,6 +62,9 @@ class BootScene extends Phaser.Scene {
         this.load.image('coin_50', './src/assets/textures/pickups/50_uah.png');
         this.load.image('coin_100', './src/assets/textures/pickups/100_uah.png');
         
+        // Завантажуємо текстуру скутера
+        this.load.image('scooter', './src/assets/textures/pickups/scooter.png');
+        
         // Завантажуємо текстуру обмінника
         this.load.image('exchange', './src/assets/textures/exchange.png');
         
@@ -137,13 +140,28 @@ class BootScene extends Phaser.Scene {
         this.load.audio('back_3', './src/assets/music/back_3.mp3');
         this.load.audio('back_4', './src/assets/music/back_4.mp3');
         this.load.audio('back_5', './src/assets/music/back_5.mp3');
+        this.load.audio('gameover', './src/assets/music/gameover.mp3');
         
         // Завантажуємо звукові ефекти
         this.load.audio('running', './src/assets/sounds/running.mp3');
+        this.load.audio('money', './src/assets/sounds/money.wav');
+        this.load.audio('drink', './src/assets/sounds/Drink.wav');
+        this.load.audio('exchange_sound', './src/assets/sounds/exchange.mp3'); // Змінено з 'exchange' на 'exchange_sound'
+        this.load.audio('menu_hover', './src/assets/sounds/menu_hover.wav');
+        this.load.audio('menu_choise', './src/assets/sounds/menu_choise.wav');
+        this.load.audio('police_siren', './src/assets/sounds/stop_uhilant.mp3');
+        
+        // Завантажуємо звуки двигунів автомобілів
+        this.load.audio('engine_01', './src/assets/sounds/engine-sounds/motorseamless01.wav');
+        this.load.audio('engine_03', './src/assets/sounds/engine-sounds/motorseamless03.wav');
+        this.load.audio('engine_05', './src/assets/sounds/engine-sounds/motorseamless05.wav');
+        this.load.audio('engine_07', './src/assets/sounds/engine-sounds/motorseamless07.wav');
+        this.load.audio('engine_09', './src/assets/sounds/engine-sounds/motorseamless09.wav');
+        this.load.audio('engine_11', './src/assets/sounds/engine-sounds/motorseamless11.wav');
+        this.load.audio('engine_13', './src/assets/sounds/engine-sounds/motorseamless13.wav');
         
         // Обробка помилок завантаження
         this.load.on('loaderror', (file) => {
-            console.error('❌ Помилка завантаження файлу:', file.key, file.url);
         });
     }
 

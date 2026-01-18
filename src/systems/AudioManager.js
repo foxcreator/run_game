@@ -44,13 +44,11 @@ class AudioManager {
         // Перевіряємо чи всі треки завантажені
         for (const trackKey of this.musicTracks) {
             if (!this.scene.cache.audio.exists(trackKey)) {
-                console.warn(`⚠️ AudioManager: трек "${trackKey}" не завантажений`);
                 return false;
             }
         }
         
         this.isInitialized = true;
-        console.log('✅ AudioManager ініціалізовано');
         return true;
     }
     
@@ -59,12 +57,10 @@ class AudioManager {
      */
     startMusic() {
         if (!this.isInitialized) {
-            console.warn('⚠️ AudioManager не ініціалізовано');
             return;
         }
         
         if (!this.musicEnabled) {
-            console.log('🔇 Музика вимкнена');
             return;
         }
         
@@ -91,8 +87,6 @@ class AudioManager {
             [this.currentPlaylist[i], this.currentPlaylist[j]] = 
                 [this.currentPlaylist[j], this.currentPlaylist[i]];
         }
-        
-        console.log('🎵 Новий плейлист:', this.currentPlaylist);
     }
     
     /**
@@ -101,7 +95,6 @@ class AudioManager {
     playTrack(trackKey) {
         if (!this.isInitialized || !this.musicEnabled) return;
         
-        console.log(`🎵 Відтворення треку: ${trackKey}`);
         
         // Зупиняємо поточний трек якщо він грає (для першого запуску)
         if (this.currentTrack && !this.isCrossfading) {
@@ -149,7 +142,6 @@ class AudioManager {
             nextTrackKey = this.currentPlaylist[currentIndex + 1];
         }
         
-        console.log(`🎵 Перемикання: ${this.currentTrackKey} → ${nextTrackKey}`);
         
         // Запускаємо crossfade
         this.crossfadeToTrack(nextTrackKey);
@@ -211,7 +203,6 @@ class AudioManager {
                 this.nextTrack = null;
                 this.isCrossfading = false;
                 
-                console.log('✅ Crossfade завершено');
             }
         }, 50); // Оновлення кожні 50ms
     }
@@ -223,7 +214,6 @@ class AudioManager {
         if (this.currentTrack && this.currentTrack.isPlaying) {
             this.currentTrack.pause();
             this.isPaused = true;
-            console.log('⏸️ Музика на паузі');
         }
         
         if (this.nextTrack && this.nextTrack.isPlaying) {
@@ -238,7 +228,6 @@ class AudioManager {
         if (this.currentTrack && this.isPaused) {
             this.currentTrack.resume();
             this.isPaused = false;
-            console.log('▶️ Музика відновлена');
         }
         
         if (this.nextTrack && this.nextTrack.isPaused) {
@@ -265,7 +254,6 @@ class AudioManager {
         
         this.isPaused = false;
         this.isCrossfading = false;
-        console.log('⏹️ Музика зупинена');
     }
     
     /**
@@ -286,7 +274,6 @@ class AudioManager {
         }
         
         this.saveSetting('musicVolume', this.musicVolume);
-        console.log(`🔊 Гучність музики: ${Math.round(this.musicVolume * 100)}%`);
     }
     
     /**
@@ -298,10 +285,12 @@ class AudioManager {
         
         if (!enabled) {
             this.stopMusic();
-            console.log('🔇 Музика вимкнена');
         } else {
-            this.startMusic();
-            console.log('🔊 Музика увімкнена');
+            // Запускаємо музику тільки якщо ми в GameScene
+            if (this.scene && this.scene.scene.key === 'GameScene') {
+                this.startMusic();
+            } else {
+            }
         }
     }
     
@@ -323,12 +312,16 @@ class AudioManager {
     
     /**
      * Відтворити звуковий ефект
-     * @param {string} soundKey - ключ звуку (наприклад 'running')
+     * @param {string} soundKey - унікальний ключ для збереження звуку
      * @param {boolean} loop - чи звук повинен повторюватись
      * @param {number} volume - гучність (0.0 - 1.0), якщо null - використовується soundsVolume
+     * @param {string} sourceKey - файл звуку (якщо null, використовується soundKey)
      */
-    playSound(soundKey, loop = false, volume = null) {
+    playSound(soundKey, loop = false, volume = null, sourceKey = null) {
         if (!this.isInitialized || !this.soundsEnabled) return null;
+        
+        // Якщо не вказано sourceKey - використовуємо soundKey
+        const audioFile = sourceKey || soundKey;
         
         // Перевіряємо чи звук вже грає
         if (this.sounds[soundKey] && this.sounds[soundKey].isPlaying) {
@@ -336,8 +329,7 @@ class AudioManager {
         }
         
         // Перевіряємо чи звук завантажений
-        if (!this.scene.cache.audio.exists(soundKey)) {
-            console.warn(`⚠️ AudioManager: звук "${soundKey}" не завантажений`);
+        if (!this.scene.cache.audio.exists(audioFile)) {
             return null;
         }
         
@@ -346,17 +338,16 @@ class AudioManager {
             this.sounds[soundKey].destroy();
         }
         
-        // Створюємо новий звук
+        // Створюємо новий звук з файлу audioFile
         const finalVolume = volume !== null ? volume : this.soundsVolume;
-        const sound = this.scene.sound.add(soundKey, {
+        const sound = this.scene.sound.add(audioFile, {
             volume: finalVolume,
             loop: loop
         });
         
         sound.play();
-        this.sounds[soundKey] = sound;
+        this.sounds[soundKey] = sound; // Зберігаємо під унікальним ключем
         
-        console.log(`🔊 Звук "${soundKey}" відтворюється (loop: ${loop})`);
         return sound;
     }
     
@@ -369,7 +360,6 @@ class AudioManager {
             this.sounds[soundKey].stop();
             this.sounds[soundKey].destroy();
             delete this.sounds[soundKey];
-            console.log(`⏹️ Звук "${soundKey}" зупинено`);
         }
     }
     
@@ -382,7 +372,6 @@ class AudioManager {
                 this.sounds[soundKey].pause();
             }
         }
-        console.log('⏸️ Звуки на паузі');
     }
     
     /**
@@ -394,7 +383,6 @@ class AudioManager {
                 this.sounds[soundKey].resume();
             }
         }
-        console.log('▶️ Звуки відновлені');
     }
     
     /**
@@ -420,7 +408,6 @@ class AudioManager {
         }
         
         this.saveSetting('soundsVolume', this.soundsVolume);
-        console.log(`🔊 Гучність звуків: ${Math.round(this.soundsVolume * 100)}%`);
     }
     
     /**
@@ -432,9 +419,7 @@ class AudioManager {
         
         if (!enabled) {
             this.stopAllSounds();
-            console.log('🔇 Звуки вимкнені');
         } else {
-            console.log('🔊 Звуки увімкнені');
         }
     }
     
@@ -459,6 +444,15 @@ class AudioManager {
         return this.sounds[soundKey] && this.sounds[soundKey].isPlaying;
     }
     
+    /**
+     * Отримати об'єкт звуку для прямої роботи з ним
+     * @param {string} soundKey - ключ звуку
+     * @returns {Phaser.Sound.BaseSound|null}
+     */
+    getSound(soundKey) {
+        return this.sounds[soundKey] || null;
+    }
+    
     // ========== UTILITY ==========
     
     /**
@@ -469,7 +463,6 @@ class AudioManager {
             const value = localStorage.getItem(`audio_${key}`);
             return value !== null ? JSON.parse(value) : defaultValue;
         } catch (e) {
-            console.warn(`⚠️ Помилка завантаження налаштування ${key}:`, e);
             return defaultValue;
         }
     }
@@ -481,7 +474,6 @@ class AudioManager {
         try {
             localStorage.setItem(`audio_${key}`, JSON.stringify(value));
         } catch (e) {
-            console.warn(`⚠️ Помилка збереження налаштування ${key}:`, e);
         }
     }
     

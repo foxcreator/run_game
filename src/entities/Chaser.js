@@ -85,6 +85,11 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         // Напрямок руху для анімацій
         this.lastDirection = 'front'; // front, rear, left, right
         this.isMovingChaser = false; // Чи рухається ворог (для анімацій)
+        
+        // Audio manager для звукових ефектів
+        this.audioManager = null;
+        this.soundId = `enemy_${Date.now()}_${Math.random()}`; // Унікальний ID для звуку цього ворога
+        this.soundPlaybackRate = 0.95 + Math.random() * 0.1; // Випадкова швидкість відтворення 0.95-1.05
     }
     
     setNavigationSystem(navigationSystem) {
@@ -95,17 +100,13 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
     setPathfindingSystem(pathfindingSystem) {
         // Ігноруємо старий PathfindingSystem
         // Використовуємо тільки NavigationSystem
-        console.warn('Chaser.setPathfindingSystem() застарілий, використовуйте setNavigationSystem()');
     }
     
     createVisuals(scene) {
-        console.log('🔍 Chaser.createVisuals викликано для типу:', this.type);
-        
         // Для Blocker використовуємо текстури з анімаціями
         if (this.type === 'Blocker') {
             // Перевіряємо чи текстура завантажена
             if (scene.textures.exists('blocker_standing_front')) {
-                console.log('✅ Blocker: використовую текстури');
                 this.setTexture('blocker_standing_front');
                 const size = GAME_CONFIG.CHASERS.BLOCKER.DISPLAY_SIZE;
                 this.setDisplaySize(size, size);
@@ -117,8 +118,6 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
                 // Налаштовуємо body для колізій ПІСЛЯ того як спрайт створено
                 // Body налаштовується в конструкторі через physics.add.existing
             } else {
-                console.warn('⚠️ Текстури Blocker не завантажені, використовую fallback');
-                console.log('Доступні текстури:', Object.keys(scene.textures.list).filter(k => k.includes('blocker')));
                 // Fallback: використовуємо старий спосіб
                 const textureKey = spriteManager.createChaserSprite(scene, this.type);
                 this.setTexture(textureKey);
@@ -130,7 +129,6 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         } else if (this.type === 'Sticker') {
             // Для Sticker використовуємо текстури з анімаціями
             if (scene.textures.exists('sticker_standing_front')) {
-                console.log('✅ Sticker: використовую текстури');
                 this.setTexture('sticker_standing_front');
                 const size = GAME_CONFIG.CHASERS.STICKER.DISPLAY_SIZE;
                 this.setDisplaySize(size, size);
@@ -139,8 +137,6 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
                 // Створюємо анімації для Sticker
                 this.createAnimations(scene);
             } else {
-                console.warn('⚠️ Текстури Sticker не завантажені, використовую fallback');
-                console.log('Доступні текстури:', Object.keys(scene.textures.list).filter(k => k.includes('sticker')));
                 // Fallback: використовуємо старий спосіб
                 const textureKey = spriteManager.createChaserSprite(scene, this.type);
                 this.setTexture(textureKey);
@@ -151,13 +147,13 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
             }
         } else {
             // Fallback для інших типів
-            const textureKey = spriteManager.createChaserSprite(scene, this.type);
-            this.setTexture(textureKey);
-            
+        const textureKey = spriteManager.createChaserSprite(scene, this.type);
+        this.setTexture(textureKey);
+        
             const config = spriteManager.CHASER_SPRITES.STICKER;
-            const size = config.radius * 2;
-            this.setDisplaySize(size, size);
-            this.setDepth(GAME_CONFIG.CHASERS.COMMON.DEPTH);
+        const size = config.radius * 2;
+        this.setDisplaySize(size, size);
+        this.setDepth(GAME_CONFIG.CHASERS.COMMON.DEPTH);
         }
     }
     
@@ -859,6 +855,72 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
                 }
             }
         }
+        
+        // Оновлюємо звуки
+        this.updateSounds();
+        
+        // Оновлюємо візуалізацію
+        this.updateVisuals();
+    }
+    
+    /**
+     * Оновлює звуки залежно від стану руху та відстані до гравця
+     */
+    updateSounds() {
+        if (!this.audioManager || !this.target) return;
+        
+        // Звук бігу відтворюється тільки коли ворог рухається
+        const currentSpeed = this.body ? Math.sqrt(this.body.velocity.x ** 2 + this.body.velocity.y ** 2) : 0;
+        const shouldPlayRunning = currentSpeed > 10 && !this.isFrozen;
+        
+        const isRunningPlaying = this.audioManager.isSoundPlaying(this.soundId);
+        
+        if (shouldPlayRunning && !isRunningPlaying) {
+            // Починаємо відтворювати звук бігу (loop)
+            const sound = this.audioManager.playSound(this.soundId, true, null, 'running');
+            // Застосовуємо унікальну швидкість відтворення для розсінхрону
+            if (sound) {
+                sound.setRate(this.soundPlaybackRate);
+            }
+        } else if (!shouldPlayRunning && isRunningPlaying) {
+            // Зупиняємо звук бігу
+            this.audioManager.stopSound(this.soundId);
+        }
+        
+        // Якщо звук грає - оновлюємо гучність залежно від відстані до гравця
+        if (isRunningPlaying) {
+            const runningSound = this.audioManager.getSound(this.soundId);
+            if (runningSound && this.target) {
+                // Обчислюємо відстань до гравця
+                const dx = this.target.x - this.x;
+                const dy = this.target.y - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // Параметри з конфігу
+                const config = GAME_CONFIG.AUDIO.ENEMY_SOUNDS;
+                const maxDist = config.MAX_DISTANCE;
+                const minDist = config.MIN_DISTANCE;
+                const maxVol = config.MAX_VOLUME;
+                const minVol = config.MIN_VOLUME;
+                
+                let volume;
+                if (distance <= minDist) {
+                    // Дуже близько - повна гучність
+                    volume = maxVol;
+                } else if (distance >= maxDist) {
+                    // Дуже далеко - мінімальна гучність
+                    volume = minVol;
+                } else {
+                    // Лінійна інтерполяція між min та max відстанню
+                    const ratio = (distance - minDist) / (maxDist - minDist);
+                    volume = maxVol - (maxVol - minVol) * ratio;
+                }
+                
+                // Застосовуємо гучність з урахуванням глобальних налаштувань звуків
+                const globalVolume = this.audioManager.getSoundsVolume();
+                runningSound.setVolume(volume * globalVolume);
+            }
+        }
     }
     
     /**
@@ -922,6 +984,11 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
     }
     
     destroy() {
+        // Зупиняємо звук перед знищенням
+        if (this.audioManager && this.soundId) {
+            this.audioManager.stopSound(this.soundId);
+        }
+        
         if (this.body) {
             this.body.destroy();
         }

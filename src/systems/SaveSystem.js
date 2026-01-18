@@ -14,7 +14,6 @@ class SaveSystem {
             localStorage.setItem(this.STORAGE_KEY, jsonData);
             return true;
         } catch (error) {
-            console.error('SaveSystem: Помилка збереження:', error);
             return false;
         }
     }
@@ -31,7 +30,6 @@ class SaveSystem {
             }
             return JSON.parse(jsonData);
         } catch (error) {
-            console.error('SaveSystem: Помилка завантаження:', error);
             return null;
         }
     }
@@ -94,7 +92,6 @@ class SaveSystem {
             localStorage.removeItem(this.STORAGE_KEY);
             return true;
         } catch (error) {
-            console.error('SaveSystem: Помилка очищення:', error);
             return false;
         }
     }
