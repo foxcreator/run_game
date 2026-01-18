@@ -153,6 +153,7 @@ class BootScene extends Phaser.Scene {
         this.load.audio('menu_hover', './src/assets/sounds/menu_hover.wav');
         this.load.audio('menu_choise', './src/assets/sounds/menu_choise.wav');
         this.load.audio('police_siren', './src/assets/sounds/stop_uhilant.mp3');
+        this.load.audio('fall', './src/assets/sounds/fall.ogg');
         
         // Завантажуємо звуки двигунів автомобілів
         this.load.audio('engine_01', './src/assets/sounds/engine-sounds/motorseamless01.wav');

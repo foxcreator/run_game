@@ -150,6 +150,12 @@ class Car extends Phaser.GameObjects.Image {
     updateSounds() {
         if (!this.engineSound || !this.scene.player) return;
         
+        // Якщо гра на паузі - зменшуємо гучність до 0
+        if (this.scene.isPaused) {
+            this.engineSound.setVolume(0);
+            return;
+        }
+        
         const audioConfig = GAME_CONFIG.AUDIO.CAR_ENGINE;
         const player = this.scene.player;
         
@@ -694,9 +700,41 @@ class Car extends Phaser.GameObjects.Image {
             GAME_CONFIG.OBSTACLES.MOVING_BUS.FREEZE_DURATION_MAX
         );
 
-        // Якщо це гравець - запускаємо анімацію падіння
-        if (entity.type === 'Player' && entity.triggerFall) {
-            entity.triggerFall();
+        // Відтворюємо звук падіння
+        if (this.scene.sound && this.scene.cache.audio.exists('fall')) {
+            const fallConfig = GAME_CONFIG.AUDIO.FALL_SOUND;
+            
+            // Якщо це гравець - запускаємо анімацію падіння та звук
+            if (entity.type === 'Player') {
+                if (entity.triggerFall) {
+                    entity.triggerFall();
+                }
+                this.scene.sound.play('fall', { 
+                    volume: fallConfig.PLAYER_VOLUME 
+                });
+            }
+            // Якщо це ворог - відтворюємо звук з гучністю залежно від відстані до гравця
+            else if (entity.type && (entity.type === 'Blocker' || entity.type === 'Sticker') && this.scene.player) {
+                // Обчислюємо відстань від ворога до гравця
+                const distanceToPlayer = Phaser.Math.Distance.Between(
+                    entity.x, entity.y,
+                    this.scene.player.x, this.scene.player.y
+                );
+                
+                // Обчислюємо гучність на основі відстані
+                let volume = 0;
+                if (distanceToPlayer < fallConfig.ENEMY_MIN_DISTANCE) {
+                    volume = fallConfig.ENEMY_MAX_VOLUME;
+                } else if (distanceToPlayer < fallConfig.ENEMY_MAX_DISTANCE) {
+                    const ratio = (fallConfig.ENEMY_MAX_DISTANCE - distanceToPlayer) / 
+                                 (fallConfig.ENEMY_MAX_DISTANCE - fallConfig.ENEMY_MIN_DISTANCE);
+                    volume = fallConfig.ENEMY_MAX_VOLUME * ratio;
+                }
+                
+                if (volume > 0) {
+                    this.scene.sound.play('fall', { volume });
+                }
+            }
         }
 
         if (entity.freeze) { entity.freeze(freezeDuration); }
