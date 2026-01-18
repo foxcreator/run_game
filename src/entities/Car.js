@@ -100,6 +100,112 @@ class Car extends Phaser.GameObjects.Image {
         
         this.updateRotation();
         this.active = true;
+        
+        // Звук двигуна
+        this.engineSound = null;
+        this.engineSoundKey = null;
+        this.audioManager = scene.audioManager || null;
+        this.initEngineSound();
+    }
+    
+    /**
+     * Ініціалізує звук двигуна для цього авто
+     */
+    initEngineSound() {
+        if (!this.audioManager || !this.textureKey) return;
+        
+        const config = GAME_CONFIG.OBSTACLES.MOVING_BUS;
+        
+        // Отримуємо звук двигуна для цієї текстури
+        let engineSoundKey = config.CAR_ENGINE_SOUNDS[this.textureKey];
+        
+        // Якщо для текстури немає звуку - обираємо рандомний з пулу
+        if (!engineSoundKey || !this.scene.cache.audio.exists(engineSoundKey)) {
+            const enginePool = config.ENGINE_SOUND_POOL || [];
+            const availableEngines = enginePool.filter(key => this.scene.cache.audio.exists(key));
+            
+            if (availableEngines.length > 0) {
+                engineSoundKey = availableEngines[Math.floor(Math.random() * availableEngines.length)];
+            }
+        }
+        
+        if (!engineSoundKey) return;
+        
+        this.engineSoundKey = `engine_car_${this.scene.sys.game.loop.frame}_${Math.random()}`;
+        
+        // Створюємо звук двигуна (зациклений)
+        this.engineSound = this.scene.sound.add(engineSoundKey, {
+            volume: 0,
+            loop: true
+        });
+        
+        if (this.engineSound) {
+            this.engineSound.play();
+        }
+    }
+    
+    /**
+     * Оновлює звук двигуна на основі відстані до гравця та швидкості авто
+     */
+    updateSounds() {
+        if (!this.engineSound || !this.scene.player) return;
+        
+        // Якщо гра на паузі - зменшуємо гучність до 0
+        if (this.scene.isPaused) {
+            this.engineSound.setVolume(0);
+            return;
+        }
+        
+        const audioConfig = GAME_CONFIG.AUDIO.CAR_ENGINE;
+        const player = this.scene.player;
+        
+        // Обчислюємо відстань до гравця
+        const distance = Phaser.Math.Distance.Between(
+            this.x, this.y,
+            player.x, player.y
+        );
+        
+        // Обчислюємо гучність на основі відстані
+        let volume = 0;
+        if (distance < audioConfig.MIN_DISTANCE) {
+            volume = audioConfig.MAX_VOLUME;
+        } else if (distance < audioConfig.MAX_DISTANCE) {
+            const ratio = (audioConfig.MAX_DISTANCE - distance) / (audioConfig.MAX_DISTANCE - audioConfig.MIN_DISTANCE);
+            volume = audioConfig.MIN_VOLUME + (audioConfig.MAX_VOLUME - audioConfig.MIN_VOLUME) * ratio;
+        } else {
+            volume = audioConfig.MIN_VOLUME;
+        }
+        
+        // Застосовуємо глобальну гучність звуків якщо є audioManager
+        if (this.audioManager) {
+            volume *= this.audioManager.soundsVolume;
+            
+            // Якщо звуки вимкнені
+            if (!this.audioManager.soundsEnabled) {
+                volume = 0;
+            }
+        }
+        
+        this.engineSound.setVolume(volume);
+        
+        // Обчислюємо швидкість відтворення на основі швидкості авто
+        const currentSpeed = this.body ? Math.sqrt(
+            this.body.velocity.x * this.body.velocity.x + 
+            this.body.velocity.y * this.body.velocity.y
+        ) : 0;
+        
+        let playbackRate;
+        if (currentSpeed < audioConfig.SPEED_THRESHOLD || this.isAccident) {
+            // Авто стоїть або в ДТП - дуже повільно
+            playbackRate = audioConfig.IDLE_PLAYBACK_RATE;
+        } else {
+            // Авто їде - нормально або трохи швидше
+            const speedRatio = Math.min(currentSpeed / this.speed, 1.0);
+            playbackRate = audioConfig.MOVING_PLAYBACK_RATE_MIN + 
+                (audioConfig.MOVING_PLAYBACK_RATE_MAX - audioConfig.MOVING_PLAYBACK_RATE_MIN) * speedRatio;
+        }
+        
+        this.engineSound.setRate(playbackRate);
     }
     
     isOnRoad(x, y) {
@@ -594,9 +700,41 @@ class Car extends Phaser.GameObjects.Image {
             GAME_CONFIG.OBSTACLES.MOVING_BUS.FREEZE_DURATION_MAX
         );
 
-        // Якщо це гравець - запускаємо анімацію падіння
-        if (entity.type === 'Player' && entity.triggerFall) {
-            entity.triggerFall();
+        // Відтворюємо звук падіння
+        if (this.scene.sound && this.scene.cache.audio.exists('fall')) {
+            const fallConfig = GAME_CONFIG.AUDIO.FALL_SOUND;
+            
+            // Якщо це гравець - запускаємо анімацію падіння та звук
+            if (entity.type === 'Player') {
+                if (entity.triggerFall) {
+                    entity.triggerFall();
+                }
+                this.scene.sound.play('fall', { 
+                    volume: fallConfig.PLAYER_VOLUME 
+                });
+            }
+            // Якщо це ворог - відтворюємо звук з гучністю залежно від відстані до гравця
+            else if (entity.type && (entity.type === 'Blocker' || entity.type === 'Sticker') && this.scene.player) {
+                // Обчислюємо відстань від ворога до гравця
+                const distanceToPlayer = Phaser.Math.Distance.Between(
+                    entity.x, entity.y,
+                    this.scene.player.x, this.scene.player.y
+                );
+                
+                // Обчислюємо гучність на основі відстані
+                let volume = 0;
+                if (distanceToPlayer < fallConfig.ENEMY_MIN_DISTANCE) {
+                    volume = fallConfig.ENEMY_MAX_VOLUME;
+                } else if (distanceToPlayer < fallConfig.ENEMY_MAX_DISTANCE) {
+                    const ratio = (fallConfig.ENEMY_MAX_DISTANCE - distanceToPlayer) / 
+                                 (fallConfig.ENEMY_MAX_DISTANCE - fallConfig.ENEMY_MIN_DISTANCE);
+                    volume = fallConfig.ENEMY_MAX_VOLUME * ratio;
+                }
+                
+                if (volume > 0) {
+                    this.scene.sound.play('fall', { volume });
+                }
+            }
         }
 
         if (entity.freeze) { entity.freeze(freezeDuration); }
@@ -606,6 +744,9 @@ class Car extends Phaser.GameObjects.Image {
     }
 
     update(delta) {
+        // Оновлення звуків двигуна
+        this.updateSounds();
+        
         if (this.collisionCooldown > 0) {
             this.collisionCooldown -= delta;
             if (this.collisionCooldown < 0) {
@@ -869,6 +1010,13 @@ class Car extends Phaser.GameObjects.Image {
     }
     
     destroy() {
+        // Зупиняємо та видаляємо звук двигуна
+        if (this.engineSound) {
+            this.engineSound.stop();
+            this.engineSound.destroy();
+            this.engineSound = null;
+        }
+        
         if (this.body) {
             this.body.destroy();
         }

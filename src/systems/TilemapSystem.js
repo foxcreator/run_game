@@ -64,7 +64,6 @@ class TilemapSystem {
         try {
             this.loadCollisionMap();
         } catch (error) {
-            console.error('Помилка завантаження collision map:', error);
             throw error;
         }
         
@@ -73,7 +72,6 @@ class TilemapSystem {
             this.createVisualMap();
             this.createKioskSprites();
         } catch (error) {
-            console.error('Помилка створення візуалізації:', error);
             throw error;
         }
     }
@@ -85,7 +83,6 @@ class TilemapSystem {
     loadCollisionMap() {
         // Перевіряємо чи текстура завантажена
         if (!this.scene.textures.exists('collision_map')) {
-            console.error('❌ Текстура collision_map не знайдена!');
             // Fallback: створюємо порожню collision map
             this.initializeEmptyCollisionMap();
             return;
@@ -97,7 +94,6 @@ class TilemapSystem {
         const sourceImage = texture.getSourceImage();
         
         if (!sourceImage) {
-            console.error('❌ Не вдалося отримати зображення з текстури collision_map');
             this.initializeEmptyCollisionMap();
             return;
         }
@@ -456,8 +452,6 @@ class TilemapSystem {
                 const textureKey = spriteConfig.value;
                 
                 if (!this.scene.textures.exists(textureKey)) {
-                    console.error('❌ Текстура не знайдена:', textureKey);
-                    console.error('Доступні текстури:', Object.keys(this.scene.textures.list));
                     // Fallback на колір якщо текстура не завантажена
                     sprite = this.scene.add.rectangle(
                         kiosk.worldX,
@@ -568,7 +562,6 @@ class TilemapSystem {
             // Використовуємо текстуру
             // Перевіряємо чи текстура завантажена
             if (!this.scene.textures.exists(spriteConfig.value)) {
-                console.error('Текстура не знайдена при респавні:', spriteConfig.value);
                 // Fallback на колір якщо текстура не завантажена
                 sprite = this.scene.add.rectangle(
                     kiosk.worldX,
@@ -801,7 +794,6 @@ class TilemapSystem {
         
         // Перевіряємо чи текстура карти завантажена
         if (!this.scene.textures.exists('map')) {
-            console.error('❌ Текстура map не знайдена! Використовується fallback.');
             // Fallback: створюємо простий graphics об'єкт
             this.mapGraphics = this.scene.add.graphics();
             this.mapGraphics.setScrollFactor(1);
@@ -857,13 +849,11 @@ class TilemapSystem {
         // Отримуємо текстуру
         const sourceTexture = this.scene.textures.get(textureKey);
         if (!sourceTexture) {
-            console.warn('Текстура не знайдена для Canvas:', textureKey);
             return;
         }
         
         const sourceImage = sourceTexture.getSourceImage();
         if (!sourceImage) {
-            console.warn('Зображення текстури не знайдено:', textureKey);
             return;
         }
         
@@ -970,6 +960,47 @@ class TilemapSystem {
         }
         
         return false;
+    }
+    
+    /**
+     * Перевіряє чи є піксель водою (синій колір на карті колізій)
+     */
+    isWater(worldX, worldY) {
+        if (!this.scene || !this.scene.textures.exists('collision_map')) {
+            return false;
+        }
+        
+        // Перевіряємо межі
+        if (worldX < 0 || worldX >= this.worldWidth || worldY < 0 || worldY >= this.worldHeight) {
+            return false;
+        }
+        
+        // Отримуємо текстуру карти колізій
+        const texture = this.scene.textures.get('collision_map');
+        const canvas = texture.getSourceImage();
+        
+        // Створюємо canvas для отримання даних пікселів (кешуємо)
+        if (!this.collisionMapCanvas) {
+            this.collisionMapCanvas = document.createElement('canvas');
+            this.collisionMapCanvas.width = canvas.width;
+            this.collisionMapCanvas.height = canvas.height;
+            const ctx = this.collisionMapCanvas.getContext('2d');
+            ctx.drawImage(canvas, 0, 0);
+            this.collisionMapImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        }
+        
+        // Конвертуємо світові координати в координати текстури
+        const pixelX = Math.floor((worldX / this.worldWidth) * this.collisionMapCanvas.width);
+        const pixelY = Math.floor((worldY / this.worldHeight) * this.collisionMapCanvas.height);
+        
+        // Отримуємо колір пікселя
+        const index = (pixelY * this.collisionMapCanvas.width + pixelX) * 4;
+        const r = this.collisionMapImageData.data[index];
+        const g = this.collisionMapImageData.data[index + 1];
+        const b = this.collisionMapImageData.data[index + 2];
+        
+        // Вода - синій колір (високе значення B, низькі R і G)
+        return b > 150 && b > r && b > g;
     }
     
     // Перевірка чи область (кілька тайлів) є дорогою або тротуаром

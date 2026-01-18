@@ -1,5 +1,5 @@
-// Scooter - скутер (бонус 2)
-// speedMultiplier += 0.5, імунітет до SoftCrowd на 2.0 sec
+// Scooter - скутер (бонус)
+// speedMultiplier += 0.5 на 2.0 sec
 import Bonus from '../Bonus.js';
 import { GAME_CONFIG } from '../../config/gameConfig.js';
 
@@ -15,9 +15,6 @@ class Scooter extends Bonus {
         
         // Додаємо баф швидкості
         player.addSpeedBuff(0.5, duration);
-        
-        // Додаємо імунітет до SoftCrowd
-        player.addImmunityToSoftCrowd(duration);
     }
 }
 

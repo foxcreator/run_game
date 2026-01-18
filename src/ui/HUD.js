@@ -1,5 +1,4 @@
 // HUD - інтерфейс користувача
-// Версія без логів - очищено всі console.log
 class HUD {
     constructor(scene) {
         this.scene = scene;
@@ -22,7 +21,6 @@ class HUD {
     create(player) {
         try {
             if (!this.scene) {
-                console.error('❌ HUD.create() this.scene не існує!');
                 return;
             }
             
@@ -136,8 +134,6 @@ class HUD {
                 .setScrollFactor(0)
                 .setDepth(202);
         } catch (error) {
-            console.error('❌❌❌ HUD.create() КРИТИЧНА ПОМИЛКА:', error);
-            console.error('❌❌❌ HUD.create() Stack:', error.stack);
         }
     }
     
@@ -153,7 +149,6 @@ class HUD {
         // Оновлення грошей - ВИКОНУЄТЬСЯ ЗАВЖДИ НА ПОЧАТКУ
         if (this.moneyText) {
             if (!this.scene) {
-                console.error('❌ HUD.update() this.scene не існує!');
                 return;
             }
             
@@ -166,7 +161,6 @@ class HUD {
             this.moneyText.setText(moneyString);
         } else {
             if (!this.moneyTextWarningShown) {
-                console.warn('⚠️ HUD.update() moneyText не існує!');
                 this.moneyTextWarningShown = true;
             }
         }
@@ -246,14 +240,6 @@ class HUD {
         // Іконка Скутера (якщо є активні speedBuffs)
         if (this.player.speedBuffs && Array.isArray(this.player.speedBuffs) && this.player.speedBuffs.length > 0) {
             const icon = this.scene.add.rectangle(iconX, 0, iconSize, iconSize, 0x0000ff, 1) // Синій для скутера
-                .setOrigin(0, 0.5);
-            this.bonusIconsContainer.add(icon);
-            iconX += iconSpacing;
-        }
-        
-        // Іконка імунітету до SoftCrowd
-        if (this.player.hasImmunityToSoftCrowd && typeof this.player.hasImmunityToSoftCrowd === 'function' && this.player.hasImmunityToSoftCrowd()) {
-            const icon = this.scene.add.rectangle(iconX, 0, iconSize, iconSize, 0x00ff00, 1) // Зелений для імунітету
                 .setOrigin(0, 0.5);
             this.bonusIconsContainer.add(icon);
             iconX += iconSpacing;

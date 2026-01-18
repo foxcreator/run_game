@@ -21,11 +21,13 @@ class CaptureSystem {
         const dt = delta / 1000; // Перетворюємо в секунди
         
         // Знаходимо мінімальну відстань до переслідувачів
+        // ВАЖЛИВО: Sticker не заповнює capture поступово, тільки Blocker!
         let minDistance = Infinity;
         
         if (chasers.length > 0) {
             for (const chaser of chasers) {
-                if (chaser && chaser.active) {
+                // Фільтруємо тільки Blocker для поступового заповнення
+                if (chaser && chaser.active && chaser.type === 'Blocker') {
                     const distance = Phaser.Math.Distance.Between(
                         player.x, player.y,
                         chaser.x, chaser.y

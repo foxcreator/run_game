@@ -1,4 +1,6 @@
 // ShopScene - сцена магазину
+import { GAME_CONFIG } from '../config/gameConfig.js';
+
 class ShopScene extends Phaser.Scene {
     constructor() {
         super({ key: 'ShopScene' });
@@ -13,6 +15,16 @@ class ShopScene extends Phaser.Scene {
         const scaleY = height / background.height;
         const scale = Math.max(scaleX, scaleY);
         background.setScale(scale);
+
+        // Версія гри (зверху зліва)
+        this.add.text(10, 10, GAME_CONFIG.VERSION, {
+            fontSize: '14px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial, sans-serif',
+            stroke: '#000000',
+            strokeThickness: 3,
+            alpha: 0.7
+        }).setDepth(1000);
 
         // Заголовок "МАГАЗИН"
         const titleText = 'МАГАЗИН';
@@ -112,6 +124,9 @@ class ShopScene extends Phaser.Scene {
 
         // Hover ефект
         button.on('pointerover', () => {
+            // Відтворюємо звук наведення
+            this.sound.play('menu_hover');
+            
             button.setFillStyle(0x707070);
             button.setScale(1.02);
             shadow.setScale(1.02);
@@ -140,6 +155,9 @@ class ShopScene extends Phaser.Scene {
         });
 
         button.on('pointerdown', () => {
+            // Відтворюємо звук кліку
+            this.sound.play('menu_choise');
+            
             button.setScale(0.98);
             shadow.setScale(0.98);
             buttonText.setScale(0.98);

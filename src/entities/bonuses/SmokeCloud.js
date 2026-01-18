@@ -5,7 +5,7 @@ import { GAME_CONFIG } from '../../config/gameConfig.js';
 
 class SmokeCloud extends Bonus {
     constructor(scene, x, y) {
-        super(scene, x, y, 'SMOKE');
+        super(scene, x, y, 'SMOKE_CLOUD');
     }
     
     applyEffect(player, scene) {

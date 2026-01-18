@@ -66,11 +66,14 @@ class ChaserSticker extends Chaser {
     }
     
     onHitPlayer() {
-        if (this.hitCooldown > 0) return; // Ще на cooldown
+        if (this.hitCooldown > 0) {
+            return; // Ще на cooldown
+        }
         
         // Додаємо capture
         if (this.captureSystem) {
-            this.captureSystem.addCapture(GAME_CONFIG.CHASERS.STICKER.CAPTURE_DAMAGE);
+            const damage = GAME_CONFIG.CHASERS.STICKER.CAPTURE_DAMAGE;
+            this.captureSystem.addCapture(damage);
         }
         
         // Відскакуємо назад
