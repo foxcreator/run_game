@@ -1,6 +1,7 @@
 // MenuScene - головне меню
 import { createStyledButton } from '../utils/ButtonHelper.js';
 import AudioManager from '../systems/AudioManager.js';
+import { GAME_CONFIG } from '../config/gameConfig.js';
 
 class MenuScene extends Phaser.Scene {
     constructor() {
@@ -10,6 +11,16 @@ class MenuScene extends Phaser.Scene {
 
     create() {
         const { width, height } = this.cameras.main;
+        
+        // Приховуємо лоадер коли гра завантажилась
+        const loader = document.getElementById('loader');
+        if (loader) {
+            loader.classList.add('hidden');
+            // Видаляємо лоадер через 500мс (після анімації зникнення)
+            setTimeout(() => {
+                loader.remove();
+            }, 500);
+        }
         
         // Очищаємо старе значення audioUnlocked (якщо було збережене раніше)
         localStorage.removeItem('audioUnlocked');
@@ -27,6 +38,16 @@ class MenuScene extends Phaser.Scene {
         const scaleY = height / background.height;
         const scale = Math.max(scaleX, scaleY);
         background.setScale(scale);
+
+        // Версія гри (зверху зліва)
+        this.add.text(10, 10, GAME_CONFIG.VERSION, {
+            fontSize: '14px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial, sans-serif',
+            stroke: '#000000',
+            strokeThickness: 3,
+            alpha: 0.7
+        }).setDepth(1000);
 
         // Центральне меню - сірий прямокутник (розташовано нижче, щоб не перекривати назву на зображенні)
         const menuBoxWidth = 400;
@@ -641,101 +662,106 @@ class MenuScene extends Phaser.Scene {
             strokeThickness: 3
         }).setOrigin(0.5).setDepth(102);
 
-        // Темний фон для контенту
+        // Темний фон для контенту - ЗМЕНШУЮ ВИСОТУ, щоб не заходити на кнопку!
         const contentBgWidth = aboutWidth - 80;
-        const contentBgHeight = aboutHeight - 150;
+        const contentBgHeight = aboutHeight - 150; // Було 150, тепер 230 - більше місця для кнопки
         const contentBg = this.add.rectangle(
             aboutBoxX,
-            aboutBoxY + 10,
+            aboutBoxY - 10, // Зміщую вгору, щоб не заходити на кнопку
             contentBgWidth,
             contentBgHeight,
             0x000000,
             0.3
         ).setDepth(101);
 
-        // DOM елемент з текстом і скролом - трохи менше за Rectangle щоб вміститись всередині
-        const contentHtml = `
-        <div style="
-            width: ${contentBgWidth - 10}px;
-            height: ${contentBgHeight - 10}px;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding: 12px;
-            margin: 0;
-            font-family: Arial, sans-serif;
-            font-size: 14px;
-            line-height: 1.6;
-            color: #FFFFFF;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-            box-sizing: border-box;
-            scrollbar-width: thin;
-            scrollbar-color: #FFD700 rgba(255,255,255,0.2);
-            word-wrap: break-word;
-        ">
-            <p style="margin: 0 0 12px 0; color: #FFD700; font-size: 16px; font-weight: bold; word-wrap: break-word;">🎯 МЕТА</p>
-            <p style="margin: 0 0 12px 0; word-wrap: break-word;">Втікайте від переслідувачів, збирайте гроші та обмінюйте їх на долари в обмінниках.<br><strong>Протримайтесь якомога довше та зберіть 20000$!</strong></p>
-            
-            <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold; word-wrap: break-word;">⌨️ УПРАВЛІННЯ</p>
-            <p style="margin: 0 0 12px 0; word-wrap: break-word;">
-                • WASD / Стрілки — рух<br>
-                • Space — підслизнення під стрічками<br>
-                • ESC — пауза
-            </p>
-            
-            <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold; word-wrap: break-word;">💰 ГРОШІ</p>
-            <p style="margin: 0 0 12px 0; word-wrap: break-word;">
-                • Збирайте гроші (10₴, 20₴, 50₴, 100₴)<br>
-                • Обмінюйте в обмінниках (43₴ = 1$)<br>
-                • ⚠️ <strong>Необмінені гривні згорають</strong> після програшу!
-            </p>
-            
-            <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold; word-wrap: break-word;">👹 ВОРОГИ</p>
-            <p style="margin: 0 0 12px 0; word-wrap: break-word;">
-                • З документами — блокують шлях, повільно заповнюють шкалу<br>
-                • З дубинками — б'ють вас, швидко заповнюють шкалу<br>
-                • ☠️ <strong>Червона шкала = 100% → Програш</strong>
-            </p>
-            
-            <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold; word-wrap: break-word;">🎁 БОНУСИ</p>
-            <p style="margin: 0 0 12px 0; word-wrap: break-word;">
-                • 🛴 Скутер — +швидкість на 2 сек<br>
-                • ☁️ Хмарка — заморожує всіх ворогів на 1.5 сек<br>
-                • 🏪 Кіоск — відновлює стаміну
-            </p>
-            
-            <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold; word-wrap: break-word;">💡 ПОРАДИ</p>
-            <p style="margin: 0 0 12px 0; word-wrap: break-word;">
-                1. Слідкуйте за стаміною — не витрачайте всю!<br>
-                2. Обмінюйте гроші часто — не ризикуйте<br>
-                3. Використовуйте ривок для втечі<br>
-                4. Хмарка рятує в критичні моменти
-            </p>
-            
-            <p style="text-align: center; margin: 15px 0 0 0; font-size: 16px; color: #FFD700;">
-                <strong>Удачі у втечі! 🏃💨</strong>
-            </p>
-        </div>
+        // Текстовий блок - МЕНШИЙ за темно-сірий, щоб залишити місце для кнопки
+        const textHeight = contentBgHeight - 80; // 430 - 80 = 350px (місце для кнопки)
         
-        <style>
-            div::-webkit-scrollbar {
-                width: 8px;
-            }
-            div::-webkit-scrollbar-track {
-                background: rgba(255,255,255,0.1);
-                border-radius: 4px;
-            }
-            div::-webkit-scrollbar-thumb {
-                background: #FFD700;
-                border-radius: 4px;
-            }
-            div::-webkit-scrollbar-thumb:hover {
-                background: #FFA500;
-            }
-        </style>
+        const contentHtml = `
+            <div style="
+                box-sizing: border-box;
+                width: ${contentBgWidth}px;
+                height: ${textHeight}px;
+                overflow-y: auto;
+                overflow-x: hidden;
+                padding: 15px;
+                margin: 0;
+                font-family: Arial, sans-serif;
+                font-size: 13px;
+                line-height: 1.5;
+                color: #FFFFFF;
+                text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+                word-wrap: break-word;
+                scrollbar-width: thin;
+                scrollbar-color: #FFD700 rgba(255, 255, 255, 0.2);
+            ">
+                <p style="margin: 0 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold;">🎯 МЕТА</p>
+                <p style="margin: 0 0 12px 0;">Втікайте від переслідувачів, збирайте гроші та обмінюйте їх на долари в обмінниках.<br><strong>Протримайтесь якомога довше та зберіть 20000$!</strong></p>
+                
+                <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold;">⌨️ УПРАВЛІННЯ</p>
+                <p style="margin: 0 0 12px 0;">
+                    • WASD / Стрілки — рух<br>
+                    • Space — підслизнення під стрічками<br>
+                    • ESC — пауза
+                </p>
+                
+                <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold;">💰 ГРОШІ</p>
+                <p style="margin: 0 0 12px 0;">
+                    • Збирайте гроші (10₴, 20₴, 50₴, 100₴)<br>
+                    • Обмінюйте в обмінниках (43₴ = 1$)<br>
+                    • ⚠️ <strong>Необмінені гривні згорають</strong> після програшу!
+                </p>
+                
+                <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold;">👹 ВОРОГИ</p>
+                <p style="margin: 0 0 12px 0;">
+                    • З документами — блокують шлях, повільно заповнюють шкалу<br>
+                    • З дубинками — б'ють вас, швидко заповнюють шкалу<br>
+                    • ☠️ <strong>Червона шкала = 100% → Програш</strong>
+                </p>
+                
+                <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold;">🎁 БОНУСИ</p>
+                <p style="margin: 0 0 12px 0;">
+                    • 🛴 Скутер — +швидкість на 2 сек<br>
+                    • ☁️ Хмарка — заморожує всіх ворогів на 1.5 сек<br>
+                    • 🏪 Кіоск — відновлює стаміну
+                </p>
+                
+                <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold;">💡 ПОРАДИ</p>
+                <p style="margin: 0 0 12px 0;">
+                    1. Слідкуйте за стаміною — не витрачайте всю!<br>
+                    2. Обмінюйте гроші часто — не ризикуйте<br>
+                    3. Використовуйте ривок для втечі<br>
+                    4. Хмарка рятує в критичні моменти
+                </p>
+                
+                <p style="text-align: center; margin: 15px 0 0 0; font-size: 16px; color: #FFD700;">
+                    <strong>Удачі у втечі! 🏃💨</strong>
+                </p>
+            </div>
+            <style>
+                div::-webkit-scrollbar {
+                    width: 8px;
+                }
+                div::-webkit-scrollbar-track {
+                    background: rgba(255,255,255,0.1);
+                    border-radius: 4px;
+                }
+                div::-webkit-scrollbar-thumb {
+                    background: #FFD700;
+                    border-radius: 4px;
+                }
+                div::-webkit-scrollbar-thumb:hover {
+                    background: #FFA500;
+                }
+            </style>
         `;
 
-        const contentElement = this.add.dom(aboutBoxX, aboutBoxY + 10, 'div').createFromHTML(contentHtml);
-        contentElement.setOrigin(0.5);
+        // Розраховую верхній край темно-сірого блока
+        const contentBgTop = (aboutBoxY - 10) - (contentBgHeight / 2);
+        
+        // DOM елемент притиснутий до верху темно-сірого блока
+        const contentElement = this.add.dom(aboutBoxX, contentBgTop, 'div').createFromHTML(contentHtml);
+        contentElement.setOrigin(0.5, 0); // Центр по X, верх по Y - ПРИТИСКАЮ ДО ВЕРХУ!
         contentElement.setDepth(102);
 
         // Кнопка закриття

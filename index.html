@@ -32,15 +32,183 @@
             max-width: 100%;
             max-height: 100%;
         }
+        
+        /* Лоадер */
+        #loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-image: url('assets/menu/background.png');
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease-out;
+        }
+        
+        #loader.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        /* Сірий блок лоадера - в стилі меню гри */
+        .loader-box {
+            position: relative;
+            width: 300px;
+            padding: 40px;
+            background-color: rgba(128, 128, 128, 0.95);
+            border: 3px solid rgba(96, 96, 96, 1);
+            border-radius: 8px;
+            box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .loader-spinner {
+            width: 60px;
+            height: 60px;
+            border: 6px solid rgba(255, 215, 0, 0.3);
+            border-top-color: #FFD700;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 25px;
+        }
+        
+        .loader-text {
+            font-size: 20px;
+            font-weight: bold;
+            color: #FFFFFF;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Сторінка для мобільних */
+        #mobile-message {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-image: url('assets/menu/background.png');
+            background-size: cover;
+            background-position: center;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+        
+        #mobile-message.active {
+            display: flex;
+        }
+        
+        .mobile-box {
+            max-width: 90%;
+            width: 500px;
+            padding: 40px 30px;
+            background-color: rgba(128, 128, 128, 0.95);
+            border: 3px solid rgba(96, 96, 96, 1);
+            border-radius: 8px;
+            box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+        
+        .mobile-emoji {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        
+        .mobile-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #FFD700;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            margin-bottom: 20px;
+        }
+        
+        .mobile-text {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #FFFFFF;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+            margin-bottom: 15px;
+        }
+        
+        .mobile-good-news {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #FFD700;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+            font-weight: bold;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
+    <!-- Повідомлення для мобільних -->
+    <div id="mobile-message">
+        <div class="mobile-box">
+            <div class="mobile-emoji">📱💔💻</div>
+            <div class="mobile-title">Ой! Телефончик не потягне!</div>
+            <div class="mobile-text">
+                Ми дуже хочемо, щоб ви спробували нашу гру, але от незадача – 
+                ваш телефон поки що не в змозі нас догнати! 🏃💨
+            </div>
+            <div class="mobile-text">
+                Наразі гра доступна тільки на комп'ютері, 
+                де можна по-справжньому відчути всю швидкість втечі! 🖥️
+            </div>
+            <div class="mobile-good-news">
+                ✨ А ось і гарна новина! ✨<br>
+                Ми вже працюємо над мобільною версією, 
+                щоб ви могли тікати від ТЦК навіть на ходу! 😄
+            </div>
+        </div>
+    </div>
+    
+    <!-- Лоадер -->
+    <div id="loader">
+        <div class="loader-box">
+            <div class="loader-spinner"></div>
+            <div class="loader-text">Завантаження...</div>
+        </div>
+    </div>
+    
     <div id="game-container"></div>
     
-    <!-- Phaser 3 через CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
-    
-    <!-- Головний файл -->
-    <script type="module" src="src/main.js"></script>
+    <script>
+        // Перевірка на мобільний пристрій
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                || (window.innerWidth <= 768);
+        }
+        
+        // Показуємо повідомлення для мобільних або завантажуємо гру для десктопу
+        if (isMobileDevice()) {
+            document.getElementById('mobile-message').classList.add('active');
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('game-container').style.display = 'none';
+        } else {
+            // Завантажуємо Phaser тільки для десктопу
+            const phaserScript = document.createElement('script');
+            phaserScript.src = 'https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js';
+            phaserScript.onload = function() {
+                // Після завантаження Phaser завантажуємо гру
+                const gameScript = document.createElement('script');
+                gameScript.type = 'module';
+                gameScript.src = 'src/main.js';
+                document.body.appendChild(gameScript);
+            };
+            document.body.appendChild(phaserScript);
+        }
+    </script>
 </body>
 </html>

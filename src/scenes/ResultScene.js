@@ -1,4 +1,6 @@
 // ResultScene - сцена після програшу
+import { GAME_CONFIG } from '../config/gameConfig.js';
+
 class ResultScene extends Phaser.Scene {
     constructor() {
         super({ key: 'ResultScene' });
@@ -37,6 +39,16 @@ class ResultScene extends Phaser.Scene {
         const scaleY = height / background.height;
         const scale = Math.max(scaleX, scaleY);
         background.setScale(scale);
+
+        // Версія гри (зверху зліва)
+        this.add.text(10, 10, GAME_CONFIG.VERSION, {
+            fontSize: '14px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial, sans-serif',
+            stroke: '#000000',
+            strokeThickness: 3,
+            alpha: 0.7
+        }).setDepth(1000);
 
         // Центральне меню з результатами - сірий прямокутник (нижче, як у MenuScene)
         const menuBoxWidth = 550;
