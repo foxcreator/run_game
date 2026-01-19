@@ -131,9 +131,8 @@ class MenuScene extends Phaser.Scene {
             buttonHeight, 
             'ДОНАТ НА ЗСУ',
             () => {
-                // TODO: Реалізувати функціонал донату
-                // Тимчасово відкриваємо посилання
-                window.open('https://bank.gov.ua/ua/about/support-the-armed-forces', '_blank');
+                // Відкриваємо посилання на донат з конфігу
+                window.open(GAME_CONFIG.DONATE_LINK, '_blank');
             }
         );
 

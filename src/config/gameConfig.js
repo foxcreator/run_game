@@ -3,6 +3,9 @@ export const GAME_CONFIG = {
     // Версія гри
     VERSION: 'beta v0.2.1',
     
+    // Посилання на донат
+    DONATE_LINK: 'https://send.monobank.ua/jar/48rat3nXyG',
+    
     // Кіоски
     KIOSKS: {
         COUNT: 5,                    // Кількість кіосків на карті
