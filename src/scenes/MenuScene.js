@@ -1,45 +1,30 @@
-// MenuScene - головне меню
 import { createStyledButton } from '../utils/ButtonHelper.js';
 import AudioManager from '../systems/AudioManager.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
-
 class MenuScene extends Phaser.Scene {
     constructor() {
         super({ key: 'MenuScene' });
         this.audioManager = null;
     }
-
     create() {
         const { width, height } = this.cameras.main;
-        
-        // Приховуємо лоадер коли гра завантажилась
         const loader = document.getElementById('loader');
         if (loader) {
             loader.classList.add('hidden');
-            // Видаляємо лоадер через 500мс (після анімації зникнення)
             setTimeout(() => {
                 loader.remove();
             }, 500);
         }
-        
-        // Очищаємо старе значення audioUnlocked (якщо було збережене раніше)
         localStorage.removeItem('audioUnlocked');
-        
-        // Ініціалізуємо AudioManager (спільний для всіх сцен через localStorage)
         if (!this.audioManager) {
             this.audioManager = new AudioManager(this);
             this.audioManager.init();
         }
-
-        // Фонове зображення (на всю екран)
         const background = this.add.image(width / 2, height / 2, 'menu_background');
-        // Масштабуємо щоб покрити весь екран
         const scaleX = width / background.width;
         const scaleY = height / background.height;
         const scale = Math.max(scaleX, scaleY);
         background.setScale(scale);
-
-        // Версія гри (зверху зліва)
         this.add.text(10, 10, GAME_CONFIG.VERSION, {
             fontSize: '14px',
             fill: '#FFFFFF',
@@ -48,45 +33,35 @@ class MenuScene extends Phaser.Scene {
             strokeThickness: 3,
             alpha: 0.7
         }).setDepth(1000);
-
-        // Центральне меню - сірий прямокутник (розташовано нижче, щоб не перекривати назву на зображенні)
         const menuBoxWidth = 400;
         const menuBoxHeight = 320;
         const menuBoxX = width / 2;
-        const menuBoxY = height * 0.65; // 65% від верху (нижче, щоб не перекривати назву)
-        
-        // Тінь меню
+        const menuBoxY = height * 0.65;
         const menuShadow = this.add.rectangle(
-            menuBoxX + 4, 
-            menuBoxY + 4, 
-            menuBoxWidth, 
-            menuBoxHeight, 
-            0x000000, 
+            menuBoxX + 4,
+            menuBoxY + 4,
+            menuBoxWidth,
+            menuBoxHeight,
+            0x000000,
             0.4
         );
-        
-        // Основний блок меню
         const menuBox = this.add.rectangle(
-            menuBoxX, 
-            menuBoxY, 
-            menuBoxWidth, 
-            menuBoxHeight, 
-            0x808080, // Сірий колір
+            menuBoxX,
+            menuBoxY,
+            menuBoxWidth,
+            menuBoxHeight,
+            0x808080,
             0.9
-        ).setStrokeStyle(3, 0x606060); // Темно-сірий контур
-
-        // Кнопки меню (вертикально)
+        ).setStrokeStyle(3, 0x606060);
         const buttonWidth = 320;
         const buttonHeight = 60;
         const buttonSpacing = 15;
-        const startY = menuBoxY - 120; // Починаємо з верху меню
-
-        // Кнопка "ГРАТИ"
+        const startY = menuBoxY - 120;
         const playButton = this.createMenuButton(
-            menuBoxX, 
-            startY, 
-            buttonWidth, 
-            buttonHeight, 
+            menuBoxX,
+            startY,
+            buttonWidth,
+            buttonHeight,
             'ГРАТИ',
             () => {
                 try {
@@ -96,48 +71,36 @@ class MenuScene extends Phaser.Scene {
                 }
             }
         );
-
-        // Кнопка "НАЛАШТУВАННЯ"
         const settingsButton = this.createMenuButton(
-            menuBoxX, 
-            startY + buttonHeight + buttonSpacing, 
-            buttonWidth, 
-            buttonHeight, 
+            menuBoxX,
+            startY + buttonHeight + buttonSpacing,
+            buttonWidth,
+            buttonHeight,
             'НАЛАШТУВАННЯ',
             () => {
-                // Просте меню налаштувань (тимчасово через alert)
                 const settingsMenu = this.createSettingsMenu();
             }
         );
-
-        // Кнопка "ПРО ГРУ"
         const aboutButton = this.createMenuButton(
-            menuBoxX, 
-            startY + (buttonHeight + buttonSpacing) * 2, 
-            buttonWidth, 
-            buttonHeight, 
+            menuBoxX,
+            startY + (buttonHeight + buttonSpacing) * 2,
+            buttonWidth,
+            buttonHeight,
             'ПРО ГРУ',
             () => {
-                // Показуємо інформацію про гру
                 this.showAboutInfo();
             }
         );
-
-        // Кнопка "ДОНАТ НА ЗСУ"
         const donateButton = this.createMenuButton(
-            menuBoxX, 
-            startY + (buttonHeight + buttonSpacing) * 3, 
-            buttonWidth, 
-            buttonHeight, 
+            menuBoxX,
+            startY + (buttonHeight + buttonSpacing) * 3,
+            buttonWidth,
+            buttonHeight,
             'ДОНАТ НА ЗСУ',
             () => {
-                // TODO: Реалізувати функціонал донату
-                // Тимчасово відкриваємо посилання
-                window.open('https://bank.gov.ua/ua/about/support-the-armed-forces', '_blank');
+                window.open(GAME_CONFIG.DONATE_LINK, '_blank');
             }
         );
-
-        // Встановлюємо правильний порядок відображення
         background.setDepth(0);
         menuShadow.setDepth(2);
         menuBox.setDepth(2);
@@ -145,19 +108,22 @@ class MenuScene extends Phaser.Scene {
         settingsButton.setDepth(3);
         aboutButton.setDepth(3);
         donateButton.setDepth(3);
+        if (GAME_CONFIG.UI.SHOW_CLICK_TO_START) {
+            this.showClickToStartOverlay();
+        }
+        const shouldShowWelcome = GAME_CONFIG.UI.SHOW_WELCOME_POPUP && 
+            (GAME_CONFIG.UI.ALWAYS_SHOW_WELCOME_POPUP || !localStorage.getItem('welcomeShown'));
         
-        // Показуємо екран "Клікни для початку" при першому завантаженні
-        this.showClickToStartOverlay();
+        if (shouldShowWelcome) {
+            this.time.delayedCall(800, () => {
+                this.showWelcomePopup();
+            });
+        }
     }
-    
     showClickToStartOverlay() {
-        // Перевіряємо реальний стан аудіо контексту
         if (this.sound.context && this.sound.context.state !== 'suspended') {
-            // Аудіо вже активне, не показуємо екран
             return;
         }
-        
-        // Створюємо напівпрозорий оверлей
         const overlay = this.add.rectangle(
             this.cameras.main.width / 2,
             this.cameras.main.height / 2,
@@ -166,8 +132,6 @@ class MenuScene extends Phaser.Scene {
             0x000000,
             0.8
         ).setDepth(1000).setInteractive();
-        
-        // Текст підказки
         const clickText = this.add.text(
             this.cameras.main.width / 2,
             this.cameras.main.height / 2,
@@ -181,8 +145,6 @@ class MenuScene extends Phaser.Scene {
                 strokeThickness: 6
             }
         ).setOrigin(0.5).setDepth(1001);
-        
-        // Анімація миготіння тексту
         this.tweens.add({
             targets: clickText,
             alpha: 0.3,
@@ -191,20 +153,14 @@ class MenuScene extends Phaser.Scene {
             repeat: -1,
             ease: 'Sine.easeInOut'
         });
-        
-        // Обробник кліку
         overlay.once('pointerdown', () => {
-            // Розблоковуємо аудіо контекст
             if (this.sound.context && this.sound.context.state === 'suspended') {
                 this.sound.context.resume().then(() => {
-                    // Відтворюємо тестовий звук для підтвердження
                     if (this.audioManager) {
                         this.audioManager.playSound('menu_hover', false);
                     }
                 });
             }
-            
-            // Видаляємо оверлей з анімацією
             this.tweens.add({
                 targets: [overlay, clickText],
                 alpha: 0,
@@ -217,17 +173,11 @@ class MenuScene extends Phaser.Scene {
             });
         });
     }
-
     createMenuButton(x, y, width, height, text, callback) {
-        // Тінь кнопки
         const shadow = this.add.rectangle(x + 2, y + 2, width, height, 0x000000, 0.5);
-        
-        // Основний блок кнопки
-        const button = this.add.rectangle(x, y, width, height, 0x606060, 0.95) // Темно-сірий
+        const button = this.add.rectangle(x, y, width, height, 0x606060, 0.95)
             .setInteractive({ useHandCursor: true })
-            .setStrokeStyle(2, 0x404040); // Ще темніший контур
-
-        // Текст кнопки
+            .setStrokeStyle(2, 0x404040);
         const buttonText = this.add.text(x, y, text, {
             fontSize: '24px',
             fill: '#FFFFFF',
@@ -236,25 +186,18 @@ class MenuScene extends Phaser.Scene {
             stroke: '#000000',
             strokeThickness: 2
         }).setOrigin(0.5);
-
-        // Встановлюємо правильну глибину - текст має бути над кнопкою
         shadow.setDepth(3);
         button.setDepth(4);
         buttonText.setDepth(5);
-
-        // Hover ефект - включаємо текст в анімацію
         button.on('pointerover', () => {
-            // Зупиняємо попередній hover звук якщо він грає
             if (this.audioManager) {
                 const existingHover = this.audioManager.getSound('menu_hover_current');
                 if (existingHover && existingHover.isPlaying) {
                     existingHover.stop();
                 }
-                // Відтворюємо новий звук
                 this.audioManager.playSound('menu_hover_current', false, null, 'menu_hover');
             }
-            
-            button.setFillStyle(0x707070); // Світліший сірий
+            button.setFillStyle(0x707070);
             button.setScale(1.02);
             shadow.setScale(1.02);
             buttonText.setScale(1.02);
@@ -266,9 +209,8 @@ class MenuScene extends Phaser.Scene {
                 ease: 'Power2'
             });
         });
-
         button.on('pointerout', () => {
-            button.setFillStyle(0x606060); // Повертаємо темно-сірий
+            button.setFillStyle(0x606060);
             button.setScale(1);
             shadow.setScale(1);
             buttonText.setScale(1);
@@ -280,13 +222,10 @@ class MenuScene extends Phaser.Scene {
                 ease: 'Power2'
             });
         });
-
         button.on('pointerdown', () => {
-            // Відтворюємо звук кліку
             if (this.audioManager) {
                 this.audioManager.playSound('menu_choise', false);
             }
-            
             button.setScale(0.98);
             shadow.setScale(0.98);
             buttonText.setScale(0.98);
@@ -304,50 +243,37 @@ class MenuScene extends Phaser.Scene {
                 }
             });
         });
-
-        // Зберігаємо посилання для управління глибиною
         button.shadow = shadow;
         button.text = buttonText;
-
         return button;
     }
-
     createSettingsMenu() {
         const { width, height } = this.cameras.main;
-        
-        // Створюємо затемнений фон
         const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7)
             .setDepth(100)
             .setInteractive();
-
-        // Вікно налаштувань
         const settingsWidth = 550;
         const settingsHeight = 480;
         const settingsBoxX = width / 2;
         const settingsBoxY = height / 2;
-        
-        // Тінь вікна
         const settingsShadow = this.add.rectangle(
-            settingsBoxX + 4, 
-            settingsBoxY + 4, 
-            settingsWidth, 
-            settingsHeight, 
-            0x000000, 
+            settingsBoxX + 4,
+            settingsBoxY + 4,
+            settingsWidth,
+            settingsHeight,
+            0x000000,
             0.5
         ).setDepth(101);
-
         const settingsBox = this.add.rectangle(
-            settingsBoxX, 
-            settingsBoxY, 
-            settingsWidth, 
-            settingsHeight, 
-            0x808080, 
+            settingsBoxX,
+            settingsBoxY,
+            settingsWidth,
+            settingsHeight,
+            0x808080,
             0.95
         )
         .setDepth(101)
         .setStrokeStyle(3, 0x606060);
-
-        // Заголовок
         const title = this.add.text(settingsBoxX, settingsBoxY - 180, 'НАЛАШТУВАННЯ', {
             fontSize: '48px',
             fill: '#FFFFFF',
@@ -356,8 +282,6 @@ class MenuScene extends Phaser.Scene {
             stroke: '#000000',
             strokeThickness: 4
         }).setOrigin(0.5).setDepth(102);
-
-        // === МУЗИКА ===
         const musicLabelY = settingsBoxY - 100;
         const musicLabel = this.add.text(settingsBoxX - 200, musicLabelY, 'МУЗИКА', {
             fontSize: '24px',
@@ -365,14 +289,10 @@ class MenuScene extends Phaser.Scene {
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold'
         }).setOrigin(0, 0.5).setDepth(102);
-        
-        // Слайдер гучності музики
         const sliderY = musicLabelY + 50;
         const sliderWidth = 320;
         const sliderHeight = 10;
         const sliderStartX = settingsBoxX - 180;
-        
-        // Фон слайдера
         const musicSliderBg = this.add.rectangle(
             sliderStartX + sliderWidth / 2,
             sliderY,
@@ -380,8 +300,6 @@ class MenuScene extends Phaser.Scene {
             sliderHeight,
             0x333333
         ).setDepth(102);
-        
-        // Заповнення слайдера
         const currentVolume = this.audioManager ? this.audioManager.getMusicVolume() : 0.5;
         const musicSliderFill = this.add.rectangle(
             sliderStartX,
@@ -390,8 +308,6 @@ class MenuScene extends Phaser.Scene {
             sliderHeight,
             0x00ff00
         ).setOrigin(0, 0.5).setDepth(103);
-        
-        // Повзунок
         const musicSliderHandle = this.add.circle(
             sliderStartX + sliderWidth * currentVolume,
             sliderY,
@@ -399,8 +315,6 @@ class MenuScene extends Phaser.Scene {
             0xffffff
         ).setDepth(104);
         musicSliderHandle.setInteractive({ draggable: true, useHandCursor: true });
-        
-        // Текст гучності (ліворуч від слайдера)
         const musicVolumeText = this.add.text(
             sliderStartX - 50,
             sliderY,
@@ -411,25 +325,18 @@ class MenuScene extends Phaser.Scene {
                 fontFamily: 'Arial, sans-serif'
             }
         ).setOrigin(0.5).setDepth(102);
-        
-        // Обробник перетягування
         musicSliderHandle.on('drag', (pointer, dragX) => {
             const minX = sliderStartX;
             const maxX = sliderStartX + sliderWidth;
             const clampedX = Phaser.Math.Clamp(dragX, minX, maxX);
-            
             musicSliderHandle.x = clampedX;
-            
             const volume = (clampedX - minX) / sliderWidth;
             musicSliderFill.width = sliderWidth * volume;
             musicVolumeText.setText(`${Math.round(volume * 100)}%`);
-            
             if (this.audioManager) {
                 this.audioManager.setMusicVolume(volume);
             }
         });
-        
-        // Іконка вимкнення/увімкнення музики (справа від слайдера)
         const isMusicEnabled = this.audioManager ? this.audioManager.isMusicEnabled() : true;
         const musicToggleIcon = this.add.text(
             sliderStartX + sliderWidth + 40,
@@ -440,7 +347,6 @@ class MenuScene extends Phaser.Scene {
             }
         ).setOrigin(0.5).setDepth(102)
         .setInteractive({ useHandCursor: true });
-        
         musicToggleIcon.on('pointerover', () => {
             if (this.audioManager) {
                 const existingHover = this.audioManager.getSound('menu_hover_current');
@@ -450,7 +356,6 @@ class MenuScene extends Phaser.Scene {
                 this.audioManager.playSound('menu_hover_current', false, null, 'menu_hover');
             }
         });
-        
         musicToggleIcon.on('pointerdown', () => {
             if (this.audioManager) {
                 this.audioManager.playSound('menu_choise', false);
@@ -459,8 +364,6 @@ class MenuScene extends Phaser.Scene {
                 musicToggleIcon.setText(newState ? '🔊' : '🔇');
             }
         });
-        
-        // === ЗВУКИ ===
         const soundsLabelY = sliderY + 80;
         const soundsLabel = this.add.text(settingsBoxX - 200, soundsLabelY, 'ЗВУКИ', {
             fontSize: '24px',
@@ -468,11 +371,7 @@ class MenuScene extends Phaser.Scene {
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold'
         }).setOrigin(0, 0.5).setDepth(102);
-        
-        // Слайдер гучності звуків
         const soundsSliderY = soundsLabelY + 50;
-        
-        // Фон слайдера
         const soundsSliderBg = this.add.rectangle(
             sliderStartX + sliderWidth / 2,
             soundsSliderY,
@@ -480,8 +379,6 @@ class MenuScene extends Phaser.Scene {
             sliderHeight,
             0x333333
         ).setDepth(102);
-        
-        // Заповнення слайдера
         const currentSoundsVolume = this.audioManager ? this.audioManager.getSoundsVolume() : 0.7;
         const soundsSliderFill = this.add.rectangle(
             sliderStartX,
@@ -490,8 +387,6 @@ class MenuScene extends Phaser.Scene {
             sliderHeight,
             0x00ff00
         ).setOrigin(0, 0.5).setDepth(103);
-        
-        // Повзунок
         const soundsSliderHandle = this.add.circle(
             sliderStartX + sliderWidth * currentSoundsVolume,
             soundsSliderY,
@@ -499,8 +394,6 @@ class MenuScene extends Phaser.Scene {
             0xffffff
         ).setDepth(104);
         soundsSliderHandle.setInteractive({ draggable: true, useHandCursor: true });
-        
-        // Текст гучності (ліворуч від слайдера)
         const soundsVolumeText = this.add.text(
             sliderStartX - 50,
             soundsSliderY,
@@ -511,25 +404,18 @@ class MenuScene extends Phaser.Scene {
                 fontFamily: 'Arial, sans-serif'
             }
         ).setOrigin(0.5).setDepth(102);
-        
-        // Обробник перетягування
         soundsSliderHandle.on('drag', (pointer, dragX) => {
             const minX = sliderStartX;
             const maxX = sliderStartX + sliderWidth;
             const clampedX = Phaser.Math.Clamp(dragX, minX, maxX);
-            
             soundsSliderHandle.x = clampedX;
-            
             const volume = (clampedX - minX) / sliderWidth;
             soundsSliderFill.width = sliderWidth * volume;
             soundsVolumeText.setText(`${Math.round(volume * 100)}%`);
-            
             if (this.audioManager) {
                 this.audioManager.setSoundsVolume(volume);
             }
         });
-        
-        // Іконка вимкнення/увімкнення звуків (справа від слайдера)
         const isSoundsEnabled = this.audioManager ? this.audioManager.isSoundsEnabled() : true;
         const soundsToggleIcon = this.add.text(
             sliderStartX + sliderWidth + 40,
@@ -540,7 +426,6 @@ class MenuScene extends Phaser.Scene {
             }
         ).setOrigin(0.5).setDepth(102)
         .setInteractive({ useHandCursor: true });
-        
         soundsToggleIcon.on('pointerover', () => {
             if (this.audioManager) {
                 const existingHover = this.audioManager.getSound('menu_hover_current');
@@ -550,7 +435,6 @@ class MenuScene extends Phaser.Scene {
                 this.audioManager.playSound('menu_hover_current', false, null, 'menu_hover');
             }
         });
-        
         soundsToggleIcon.on('pointerdown', () => {
             if (this.audioManager) {
                 this.audioManager.playSound('menu_choise', false);
@@ -559,8 +443,6 @@ class MenuScene extends Phaser.Scene {
                 soundsToggleIcon.setText(newState ? '🔊' : '🔇');
             }
         });
-
-        // Кнопка закриття
         const closeButton = this.createMenuButton(
             settingsBoxX,
             settingsBoxY + 180,
@@ -592,8 +474,6 @@ class MenuScene extends Phaser.Scene {
         closeButton.setDepth(102);
         closeButton.shadow.setDepth(101);
         closeButton.text.setDepth(102);
-
-        // Закриваємо при кліку на затемнений фон
         overlay.on('pointerdown', () => {
             overlay.destroy();
             settingsShadow.destroy();
@@ -616,43 +496,33 @@ class MenuScene extends Phaser.Scene {
             closeButton.text.destroy();
         });
     }
-
     showAboutInfo() {
         const { width, height } = this.cameras.main;
-        
-        // Створюємо затемнений фон
         const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7)
             .setDepth(100)
             .setInteractive();
-
-        // Вікно інформації - сірий прямокутник в стилі меню
         const aboutWidth = 700;
         const aboutHeight = 580;
         const aboutBoxX = width / 2;
         const aboutBoxY = height / 2;
-        
-        // Тінь вікна
         const aboutShadow = this.add.rectangle(
-            aboutBoxX + 4, 
-            aboutBoxY + 4, 
-            aboutWidth, 
-            aboutHeight, 
-            0x000000, 
+            aboutBoxX + 4,
+            aboutBoxY + 4,
+            aboutWidth,
+            aboutHeight,
+            0x000000,
             0.5
         ).setDepth(101);
-
         const aboutBox = this.add.rectangle(
-            aboutBoxX, 
-            aboutBoxY, 
-            aboutWidth, 
-            aboutHeight, 
-            0x808080, 
+            aboutBoxX,
+            aboutBoxY,
+            aboutWidth,
+            aboutHeight,
+            0x808080,
             0.95
         )
         .setDepth(101)
         .setStrokeStyle(3, 0x606060);
-
-        // Заголовок
         const title = this.add.text(aboutBoxX, aboutBoxY - aboutHeight/2 + 30, '🏃 ПРО ГРУ', {
             fontSize: '28px',
             fill: '#0057B7',
@@ -661,22 +531,17 @@ class MenuScene extends Phaser.Scene {
             stroke: '#FFD700',
             strokeThickness: 3
         }).setOrigin(0.5).setDepth(102);
-
-        // Темний фон для контенту - ЗМЕНШУЮ ВИСОТУ, щоб не заходити на кнопку!
         const contentBgWidth = aboutWidth - 80;
-        const contentBgHeight = aboutHeight - 150; // Було 150, тепер 230 - більше місця для кнопки
+        const contentBgHeight = aboutHeight - 150;
         const contentBg = this.add.rectangle(
             aboutBoxX,
-            aboutBoxY - 10, // Зміщую вгору, щоб не заходити на кнопку
+            aboutBoxY - 10,
             contentBgWidth,
             contentBgHeight,
             0x000000,
             0.3
         ).setDepth(101);
-
-        // Текстовий блок - МЕНШИЙ за темно-сірий, щоб залишити місце для кнопки
-        const textHeight = contentBgHeight - 80; // 430 - 80 = 350px (місце для кнопки)
-        
+        const textHeight = contentBgHeight - 80;
         const contentHtml = `
             <div style="
                 box-sizing: border-box;
@@ -697,35 +562,30 @@ class MenuScene extends Phaser.Scene {
             ">
                 <p style="margin: 0 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold;">🎯 МЕТА</p>
                 <p style="margin: 0 0 12px 0;">Втікайте від переслідувачів, збирайте гроші та обмінюйте їх на долари в обмінниках.<br><strong>Протримайтесь якомога довше та зберіть 20000$!</strong></p>
-                
                 <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold;">⌨️ УПРАВЛІННЯ</p>
                 <p style="margin: 0 0 12px 0;">
                     • WASD / Стрілки — рух<br>
                     • Space — підслизнення під стрічками<br>
                     • ESC — пауза
                 </p>
-                
                 <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold;">💰 ГРОШІ</p>
                 <p style="margin: 0 0 12px 0;">
                     • Збирайте гроші (10₴, 20₴, 50₴, 100₴)<br>
                     • Обмінюйте в обмінниках (43₴ = 1$)<br>
                     • ⚠️ <strong>Необмінені гривні згорають</strong> після програшу!
                 </p>
-                
                 <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold;">👹 ВОРОГИ</p>
                 <p style="margin: 0 0 12px 0;">
                     • З документами — блокують шлях, повільно заповнюють шкалу<br>
                     • З дубинками — б'ють вас, швидко заповнюють шкалу<br>
                     • ☠️ <strong>Червона шкала = 100% → Програш</strong>
                 </p>
-                
                 <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold;">🎁 БОНУСИ</p>
                 <p style="margin: 0 0 12px 0;">
                     • 🛴 Скутер — +швидкість на 2 сек<br>
                     • ☁️ Хмарка — заморожує всіх ворогів на 1.5 сек<br>
                     • 🏪 Кіоск — відновлює стаміну
                 </p>
-                
                 <p style="margin: 12px 0 8px 0; color: #FFD700; font-size: 16px; font-weight: bold;">💡 ПОРАДИ</p>
                 <p style="margin: 0 0 12px 0;">
                     1. Слідкуйте за стаміною — не витрачайте всю!<br>
@@ -733,7 +593,6 @@ class MenuScene extends Phaser.Scene {
                     3. Використовуйте ривок для втечі<br>
                     4. Хмарка рятує в критичні моменти
                 </p>
-                
                 <p style="text-align: center; margin: 15px 0 0 0; font-size: 16px; color: #FFD700;">
                     <strong>Удачі у втечі! 🏃💨</strong>
                 </p>
@@ -755,16 +614,10 @@ class MenuScene extends Phaser.Scene {
                 }
             </style>
         `;
-
-        // Розраховую верхній край темно-сірого блока
         const contentBgTop = (aboutBoxY - 10) - (contentBgHeight / 2);
-        
-        // DOM елемент притиснутий до верху темно-сірого блока
         const contentElement = this.add.dom(aboutBoxX, contentBgTop, 'div').createFromHTML(contentHtml);
-        contentElement.setOrigin(0.5, 0); // Центр по X, верх по Y - ПРИТИСКАЮ ДО ВЕРХУ!
+        contentElement.setOrigin(0.5, 0);
         contentElement.setDepth(102);
-
-        // Кнопка закриття
         const closeButton = this.createMenuButton(
             aboutBoxX,
             aboutBoxY + aboutHeight/2 - 35,
@@ -786,8 +639,6 @@ class MenuScene extends Phaser.Scene {
         closeButton.setDepth(102);
         closeButton.shadow.setDepth(101);
         closeButton.text.setDepth(102);
-
-        // Закриваємо при кліку на затемнений фон
         overlay.on('pointerdown', () => {
             overlay.destroy();
             aboutShadow.destroy();
@@ -800,6 +651,122 @@ class MenuScene extends Phaser.Scene {
             closeButton.text.destroy();
         });
     }
+    showWelcomePopup() {
+        const { width, height } = this.scale;
+        const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7)
+            .setInteractive()
+            .setDepth(100);
+        const popupWidth = 620;
+        const popupHeight = 600;
+        const popupX = width / 2;
+        const popupY = height / 2;
+        const shadow = this.add.rectangle(popupX + 4, popupY + 4, popupWidth, popupHeight, 0x000000, 0.5);
+        shadow.setDepth(101);
+        const popup = this.add.rectangle(popupX, popupY, popupWidth, popupHeight, 0x808080, 0.95)
+            .setStrokeStyle(3, 0x606060);
+        popup.setDepth(102);
+        const title = this.add.text(popupX, popupY - 270, '🎮 БЕТА ВЕРСІЯ', {
+            fontSize: '30px',
+            fill: '#0057B7',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#FFD700',
+            strokeThickness: 4,
+            resolution: 2
+        }).setOrigin(0.5).setDepth(103);
+        const versionText = this.add.text(popupX, popupY - 230, GAME_CONFIG.VERSION, {
+            fontSize: '18px',
+            fill: '#333333',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            resolution: 2
+        }).setOrigin(0.5).setDepth(103);
+        const messageText = this.add.text(popupX, popupY - 15, 
+            '🏃 Ласкаво просимо до бета-версії гри!\n\n⚠️ Це БЕТА! Тут можуть бути баги, глюки, та всілякі дивні штуки. Якщо щось працює не так - не панікуй, це нормально! 😅\n\n💡 Знайшли баг? Є крута ідея? Створюй таску на GitHub!\n\nТам можна поскаржитись, запропонувати фічу, або просто сказати "шо це було?" 🤔\n\n🙏 Дякуємо що тестуєте і допомагаєте зробити гру кращою!', {
+            fontSize: '18px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif',
+            align: 'center',
+            lineSpacing: 8,
+            stroke: '#000000',
+            strokeThickness: 3,
+            resolution: 2,
+            wordWrap: { width: 560 }
+        }).setOrigin(0.5).setDepth(103);
+        const closeButtonShadow = this.add.rectangle(popupX + 2, popupY + 207, 320, 50, 0x000000, 0.5);
+        closeButtonShadow.setDepth(102);
+        const closeButton = this.add.rectangle(popupX, popupY + 205, 320, 50, 0x606060, 0.95)
+            .setInteractive({ useHandCursor: true })
+            .setStrokeStyle(2, 0x404040);
+        closeButton.setDepth(103);
+        const closeText = this.add.text(popupX, popupY + 205, 'Зрозумів!', {
+            fontSize: '20px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            resolution: 2
+        }).setOrigin(0.5).setDepth(104);
+        const githubButtonShadow = this.add.rectangle(popupX + 2, popupY + 262, 240, 40, 0x000000, 0.5);
+        githubButtonShadow.setDepth(102);
+        const githubButton = this.add.rectangle(popupX, popupY + 260, 240, 40, 0x606060, 0.95)
+            .setInteractive({ useHandCursor: true })
+            .setStrokeStyle(2, 0x404040);
+        githubButton.setDepth(103);
+        const githubText = this.add.text(popupX, popupY + 260, '🐛 GitHub Issues', {
+            fontSize: '16px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial, sans-serif',
+            resolution: 2
+        }).setOrigin(0.5).setDepth(104);
+        closeButton.on('pointerover', () => {
+            closeButton.setFillStyle(0x707070);
+            if (this.audioManager) {
+                this.audioManager.playSound('menu_hover', false, null, 'menu_hover', true);
+            }
+        });
+        closeButton.on('pointerout', () => {
+            closeButton.setFillStyle(0x606060);
+        });
+        githubButton.on('pointerover', () => {
+            githubButton.setFillStyle(0x707070);
+            if (this.audioManager) {
+                this.audioManager.playSound('menu_hover', false, null, 'menu_hover', true);
+            }
+        });
+        githubButton.on('pointerout', () => {
+            githubButton.setFillStyle(0x606060);
+        });
+        githubButton.on('pointerdown', () => {
+            if (this.audioManager) {
+                this.audioManager.playSound('menu_choise', false);
+            }
+            window.open(GAME_CONFIG.GITHUB_ISSUES_LINK, '_blank');
+        });
+        const closePopup = () => {
+            if (this.audioManager) {
+                this.audioManager.playSound('menu_choise', false);
+            }
+            localStorage.setItem('welcomeShown', 'true');
+            overlay.destroy();
+            shadow.destroy();
+            popup.destroy();
+            title.destroy();
+            versionText.destroy();
+            messageText.destroy();
+            githubButton.destroy();
+            githubButtonShadow.destroy();
+            githubText.destroy();
+            closeButton.destroy();
+            closeButtonShadow.destroy();
+            closeText.destroy();
+        };
+        closeButton.on('pointerdown', closePopup);
+        overlay.on('pointerdown', (pointer) => {
+            if (pointer.y > popupY + 280 || pointer.y < popupY - 280 ||
+                pointer.x < popupX - popupWidth / 2 || pointer.x > popupX + popupWidth / 2) {
+                closePopup();
+            }
+        });
+    }
 }
-
 export default MenuScene;

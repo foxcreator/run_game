@@ -1,46 +1,32 @@
-// ResultScene - сцена після програшу
 import { GAME_CONFIG } from '../config/gameConfig.js';
-
 class ResultScene extends Phaser.Scene {
     constructor() {
         super({ key: 'ResultScene' });
     }
-
     init(data) {
-        // Дані з GameScene
         this.currentBankedMoney = data.currentBankedMoney || 0;
         this.moneyAddedThisGame = data.moneyAddedThisGame || 0;
         this.timeSurvived = data.timeSurvived || 0;
-        
-        // Музика Game Over
+        this.survivalBonus = data.survivalBonus || 0;
         this.gameoverMusic = null;
     }
-
     create() {
         const { width, height } = this.cameras.main;
-        
-        // Відтворюємо музику Game Over (один раз, не loop)
         if (this.sound.get('gameover')) {
             this.gameoverMusic = this.sound.get('gameover');
         } else {
-            this.gameoverMusic = this.sound.add('gameover', { 
-                volume: 0.5, 
-                loop: false 
+            this.gameoverMusic = this.sound.add('gameover', {
+                volume: 0.5,
+                loop: false
             });
         }
         this.gameoverMusic.play();
-        
-        // Додаємо обробник події shutdown для зупинки музики
         this.events.once('shutdown', this.shutdown, this);
-
-        // Фонове зображення для екрану закінчення гри
         const background = this.add.image(width / 2, height / 2, 'gameover_background');
         const scaleX = width / background.width;
         const scaleY = height / background.height;
         const scale = Math.max(scaleX, scaleY);
         background.setScale(scale);
-
-        // Версія гри (зверху зліва)
         this.add.text(10, 10, GAME_CONFIG.VERSION, {
             fontSize: '14px',
             fill: '#FFFFFF',
@@ -49,38 +35,28 @@ class ResultScene extends Phaser.Scene {
             strokeThickness: 3,
             alpha: 0.7
         }).setDepth(1000);
-
-        // Центральне меню з результатами - сірий прямокутник (нижче, як у MenuScene)
         const menuBoxWidth = 550;
         const menuBoxHeight = 380;
         const menuBoxX = width / 2;
-        const menuBoxY = height * 0.65; // 65% від верху (як у MenuScene)
-        
-        // Тінь меню
+        const menuBoxY = height * 0.65;
         const menuShadow = this.add.rectangle(
-            menuBoxX + 4, 
-            menuBoxY + 4, 
-            menuBoxWidth, 
-            menuBoxHeight, 
-            0x000000, 
+            menuBoxX + 4,
+            menuBoxY + 4,
+            menuBoxWidth,
+            menuBoxHeight,
+            0x000000,
             0.4
         ).setDepth(2);
-        
-        // Основний блок меню
         const menuBox = this.add.rectangle(
-            menuBoxX, 
-            menuBoxY, 
-            menuBoxWidth, 
-            menuBoxHeight, 
-            0x808080, // Сірий колір
+            menuBoxX,
+            menuBoxY,
+            menuBoxWidth,
+            menuBoxHeight,
+            0x808080,
             0.9
-        ).setStrokeStyle(3, 0x606060).setDepth(2); // Темно-сірий контур
-
-        // Результати (всередині меню)
-        const resultsY = menuBoxY - 80;
+        ).setStrokeStyle(3, 0x606060).setDepth(2);
+        const resultsY = menuBoxY - 130;
         const lineSpacing = 60;
-
-        // Форматуємо час виживання (X хв Y сек або Y сек)
         let timeFormatted = '';
         const totalSeconds = Math.floor(this.timeSurvived);
         if (totalSeconds >= 60) {
@@ -90,41 +66,50 @@ class ResultScene extends Phaser.Scene {
         } else {
             timeFormatted = `${totalSeconds} сек`;
         }
-
-        // Гроші - поточний баланс в банку
         const moneyText = this.add.text(
-            menuBoxX, 
-            resultsY, 
+            menuBoxX,
+            resultsY,
             `БАНК: $${this.currentBankedMoney.toLocaleString()}`,
             {
                 fontSize: '28px',
-                fill: '#FFD700', // Жовтий колір для грошей
+                fill: '#FFD700',
                 fontFamily: 'Arial, sans-serif',
                 fontStyle: 'bold',
                 stroke: '#000000',
                 strokeThickness: 3
             }
         ).setOrigin(0.5).setDepth(3);
-
-        // Додано в банк за гру
         const moneyAddedText = this.add.text(
-            menuBoxX, 
-            resultsY + lineSpacing, 
+            menuBoxX,
+            resultsY + lineSpacing,
             `+ $${this.moneyAddedThisGame.toLocaleString()}`,
             {
                 fontSize: '24px',
-                fill: '#90EE90', // Світло-зелений колір для доданих грошей
+                fill: '#90EE90',
                 fontFamily: 'Arial, sans-serif',
                 fontStyle: 'bold',
                 stroke: '#000000',
                 strokeThickness: 2
             }
         ).setOrigin(0.5).setDepth(3);
-
-        // Час виживання
+        if (this.survivalBonus > 0) {
+            const bonusText = this.add.text(
+                menuBoxX,
+                resultsY + lineSpacing * 2,
+                `🎁 Бонус за виживання: +$${this.survivalBonus}`,
+                {
+                    fontSize: '20px',
+                    fill: '#FFD700',
+                    fontFamily: 'Arial, sans-serif',
+                    fontStyle: 'bold',
+                    stroke: '#000000',
+                    strokeThickness: 2
+                }
+            ).setOrigin(0.5).setDepth(3);
+        }
         const timeText = this.add.text(
-            menuBoxX, 
-            resultsY + lineSpacing * 2, 
+            menuBoxX,
+            resultsY + lineSpacing * (this.survivalBonus > 0 ? 3 : 2),
             `ЧАС ВИЖИВАННЯ: ${timeFormatted}`,
             {
                 fontSize: '28px',
@@ -135,16 +120,26 @@ class ResultScene extends Phaser.Scene {
                 strokeThickness: 3
             }
         ).setOrigin(0.5).setDepth(3);
-
-        // Кнопки (всередині меню)
-        const buttonWidth = 240;
+        const buttonWidth = 200;
         const buttonHeight = 60;
-        const buttonY = menuBoxY + 130;
-
-        // Кнопка "МАГАЗИН"
+        const buttonSpacing = 110;
+        const topButtonY = menuBoxY + 60;
+        const bottomButtonY = menuBoxY + 130;
+        const wideButtonWidth = 420;
+        const playAgainButton = this.createMenuButton(
+            menuBoxX,
+            topButtonY,
+            wideButtonWidth,
+            buttonHeight,
+            'ГРАТИ ЗАНОВО',
+            () => {
+                this.stopGameoverMusic();
+                this.scene.start('GameScene');
+            }
+        );
         const shopButton = this.createMenuButton(
-            menuBoxX - 140,
-            buttonY,
+            menuBoxX - buttonSpacing,
+            bottomButtonY,
             buttonWidth,
             buttonHeight,
             'МАГАЗИН',
@@ -153,11 +148,9 @@ class ResultScene extends Phaser.Scene {
                 this.scene.start('ShopScene');
             }
         );
-
-        // Кнопка "МЕНЮ"
         const menuButton = this.createMenuButton(
-            menuBoxX + 140,
-            buttonY,
+            menuBoxX + buttonSpacing,
+            bottomButtonY,
             buttonWidth,
             buttonHeight,
             'МЕНЮ',
@@ -166,26 +159,19 @@ class ResultScene extends Phaser.Scene {
                 this.scene.start('MenuScene');
             }
         );
-
-        // Встановлюємо правильний порядок відображення
         background.setDepth(0);
         menuShadow.setDepth(2);
         menuBox.setDepth(2);
+        playAgainButton.setDepth(3);
         shopButton.setDepth(3);
         menuButton.setDepth(3);
     }
-
     createMenuButton(x, y, width, height, text, callback) {
-        // Тінь кнопки
         const shadow = this.add.rectangle(x + 2, y + 2, width, height, 0x000000, 0.5).setDepth(3);
-        
-        // Основний блок кнопки
         const button = this.add.rectangle(x, y, width, height, 0x606060, 0.95)
             .setInteractive({ useHandCursor: true })
             .setStrokeStyle(2, 0x404040)
             .setDepth(4);
-
-        // Текст кнопки
         const buttonText = this.add.text(x, y, text, {
             fontSize: '24px',
             fill: '#FFFFFF',
@@ -194,12 +180,8 @@ class ResultScene extends Phaser.Scene {
             stroke: '#000000',
             strokeThickness: 2
         }).setOrigin(0.5).setDepth(5);
-
-        // Hover ефект
         button.on('pointerover', () => {
-            // Відтворюємо звук наведення
             this.sound.play('menu_hover');
-            
             button.setFillStyle(0x707070);
             button.setScale(1.02);
             shadow.setScale(1.02);
@@ -212,7 +194,6 @@ class ResultScene extends Phaser.Scene {
                 ease: 'Power2'
             });
         });
-
         button.on('pointerout', () => {
             button.setFillStyle(0x606060);
             button.setScale(1);
@@ -226,11 +207,8 @@ class ResultScene extends Phaser.Scene {
                 ease: 'Power2'
             });
         });
-
         button.on('pointerdown', () => {
-            // Відтворюємо звук кліку
             this.sound.play('menu_choise');
-            
             button.setScale(0.98);
             shadow.setScale(0.98);
             buttonText.setScale(0.98);
@@ -248,23 +226,17 @@ class ResultScene extends Phaser.Scene {
                 }
             });
         });
-
         button.shadow = shadow;
         button.text = buttonText;
-
         return button;
     }
-    
     stopGameoverMusic() {
         if (this.gameoverMusic) {
             this.gameoverMusic.stop();
         }
     }
-    
     shutdown() {
-        // Зупиняємо музику при виході з сцени
         this.stopGameoverMusic();
     }
 }
-
 export default ResultScene;

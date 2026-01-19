@@ -1,16 +1,8 @@
-// Helper для створення стилізованих кнопок
 export function createStyledButton(scene, x, y, width, height, text, color, hoverColor, callback) {
-    // Створюємо градієнтну кнопку через два прямокутники (тінь + основна)
-    
-    // Тінь
     const shadow = scene.add.rectangle(x + 4, y + 4, width, height, 0x000000, 0.3);
-    
-    // Основна кнопка
     const button = scene.add.rectangle(x, y, width, height, color)
         .setInteractive({ useHandCursor: true })
         .setStrokeStyle(2, 0xffffff, 0.3);
-    
-    // Текст
     const buttonText = scene.add.text(x, y, text, {
         fontSize: `${Math.floor(height * 0.4)}px`,
         fill: '#ffffff',
@@ -19,8 +11,6 @@ export function createStyledButton(scene, x, y, width, height, text, color, hove
         stroke: '#000000',
         strokeThickness: 2
     }).setOrigin(0.5);
-    
-    // Hover ефект
     button.on('pointerover', () => {
         button.setFillStyle(hoverColor);
         button.setScale(1.05);
@@ -33,7 +23,6 @@ export function createStyledButton(scene, x, y, width, height, text, color, hove
             ease: 'Power2'
         });
     });
-    
     button.on('pointerout', () => {
         button.setFillStyle(color);
         button.setScale(1);
@@ -46,7 +35,6 @@ export function createStyledButton(scene, x, y, width, height, text, color, hove
             ease: 'Power2'
         });
     });
-    
     button.on('pointerdown', () => {
         button.setScale(0.95);
         scene.tweens.add({
@@ -61,14 +49,10 @@ export function createStyledButton(scene, x, y, width, height, text, color, hove
             }
         });
     });
-    
-    // Зберігаємо посилання для можливого видалення
     button.shadow = shadow;
     button.text = buttonText;
-    
     return button;
 }
-
 export function createTitleText(scene, x, y, text, size = 64) {
     return scene.add.text(x, y, text, {
         fontSize: `${size}px`,
@@ -86,7 +70,6 @@ export function createTitleText(scene, x, y, text, size = 64) {
         }
     }).setOrigin(0.5);
 }
-
 export function createSubtitleText(scene, x, y, text, size = 28) {
     return scene.add.text(x, y, text, {
         fontSize: `${size}px`,

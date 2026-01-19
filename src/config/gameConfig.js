@@ -3,6 +3,35 @@ export const GAME_CONFIG = {
     // Версія гри
     VERSION: 'beta v0.2.1',
     
+    // Посилання на донат
+    DONATE_LINK: 'https://send.monobank.ua/jar/5o7UpNzoQB?utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAZXh0bgNhZW0CMTEAc3J0YwZhcHBfaWQMMjU2MjgxMDQwNTU4AAGnmSvkrtywzZGSOS70RRLL0pIZRAvGuo34c4WhJdtAQYXBN7Bus1ddv-Nu7PA_aem_-dCYDjIuSfJy7Z4xJ55piQ',
+    
+    // Посилання на GitHub issues (баги та ідеї)
+    GITHUB_ISSUES_LINK: 'https://github.com/foxcreator/run_game/issues',
+    
+    // Налаштування UI
+    UI: {
+        SHOW_WELCOME_POPUP: true,            // Показувати вікно привітання
+        ALWAYS_SHOW_WELCOME_POPUP: true,     // Показувати popup кожного разу (true) або тільки раз (false)
+        SHOW_CLICK_TO_START: false           // Показувати "Клікни щоб почати" в меню
+    },
+    
+    // Бонус за виживання (відсоток від заробітку)
+    SURVIVAL_BONUS: {
+        INTERVAL: 600000,        // Інтервал нарахування (мс) - 10 хвилин
+        PERCENTAGE: 0.2          // Відсоток від заробітку (0.2 = 20%)
+    },
+    
+    // Множник заробітку за ризик (залежить від capture %)
+    RISK_MULTIPLIER: {
+        THRESHOLDS: [
+            { capture: 90, multiplier: 5 },  // >= 90% = x5
+            { capture: 70, multiplier: 3 },  // >= 70% = x3
+            { capture: 50, multiplier: 2 }   // >= 50% = x2
+        ],
+        DEFAULT: 1                           // < 50% = x1
+    },
+    
     // Кіоски
     KIOSKS: {
         COUNT: 5,                    // Кількість кіосків на карті
@@ -53,7 +82,7 @@ export const GAME_CONFIG = {
         SAFE_DISTANCE: 120,                 // Відстань до ворога, при якій capture спадає (пікселі)
         GROWTH_RATE_CLOSE: 5,              // Швидкість зростання capture коли ворог близько (одиниць/секунду)
         GROWTH_RATE_VERY_CLOSE: 15,         // Швидкість зростання capture коли ворог дуже близько (одиниць/секунду)
-        DECAY_RATE: 25                      // Швидкість спаду capture коли ворог далеко (одиниць/секунду)
+        DECAY_RATE: 10                      // Швидкість спаду capture коли ворог далеко (одиниць/секунду)
     },
     
     // Перешкоди
