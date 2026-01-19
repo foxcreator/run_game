@@ -121,6 +121,9 @@ class GameScene extends Phaser.Scene {
         this.spawnPickups();
         this.timeSurvived = 0;
         this.score = 0;
+        this.survivalBonus = 0;
+        this.nextBonusTime = GAME_CONFIG.SURVIVAL_BONUS.INTERVAL / 1000;
+        this.lastBonusBankAmount = 0;
         this.isPaused = false;
         this.pauseMenu = null;
         this.autoPausedByBlur = false;
@@ -829,11 +832,22 @@ class GameScene extends Phaser.Scene {
             );
         }
     }
+    getRiskMultiplier() {
+        const capturePercent = this.captureSystem.getCapturePercent() * 100;
+        for (const threshold of GAME_CONFIG.RISK_MULTIPLIER.THRESHOLDS) {
+            if (capturePercent >= threshold.capture) {
+                return threshold.multiplier;
+            }
+        }
+        return GAME_CONFIG.RISK_MULTIPLIER.DEFAULT;
+    }
     handlePickupCollision(player, pickup) {
         if (!pickup || !pickup.active || pickup.collected) return;
         pickup.collected = true;
         if (pickup instanceof Coin && pickup.value !== undefined) {
-            this.runMoney += pickup.value;
+            const multiplier = this.getRiskMultiplier();
+            const earnedMoney = pickup.value * multiplier;
+            this.runMoney += earnedMoney;
             if (this.audioManager) {
                 this.audioManager.playSound('money_pickup', false, null, 'money');
             }
@@ -1037,6 +1051,16 @@ class GameScene extends Phaser.Scene {
         this.checkPoliceSiren(time);
         this.updateRiverSound();
         this.timeSurvived += delta / 1000;
+        if (this.timeSurvived >= this.nextBonusTime) {
+            const earnedSinceLastBonus = this.currentBankedMoney - this.lastBonusBankAmount;
+            const bonusAmount = Math.floor(earnedSinceLastBonus * GAME_CONFIG.SURVIVAL_BONUS.PERCENTAGE);
+            if (bonusAmount > 0) {
+                this.survivalBonus += bonusAmount;
+                this.currentBankedMoney += bonusAmount;
+            }
+            this.lastBonusBankAmount = this.currentBankedMoney;
+            this.nextBonusTime += GAME_CONFIG.SURVIVAL_BONUS.INTERVAL / 1000;
+        }
         for (const obstacle of this.obstacles) {
             if (obstacle.active && obstacle.update) {
                 obstacle.update(delta);
@@ -1827,7 +1851,8 @@ class GameScene extends Phaser.Scene {
         const resultData = {
             currentBankedMoney: currentBankedMoney,
             moneyAddedThisGame: moneyAddedThisGame,
-            timeSurvived: this.timeSurvived
+            timeSurvived: this.timeSurvived,
+            survivalBonus: this.survivalBonus
         };
         this.scene.stop('GameScene');
         this.scene.start('ResultScene', resultData);

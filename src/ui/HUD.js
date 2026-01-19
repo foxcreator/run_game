@@ -13,6 +13,9 @@ class HUD {
         this.moneyText = null;
         this.moneyTextBg = null;
         this.bonusIcons = [];
+        this.multiplierText = null;
+        this.multiplierBg = null;
+        this.multiplierLabel = null;
     }
     create(player) {
         try {
@@ -98,6 +101,40 @@ class HUD {
             this.bonusIconsContainer = this.scene.add.container(barX, moneyY + 30)
                 .setScrollFactor(0)
                 .setDepth(202);
+            const multiplierX = width - 20;
+            const multiplierY = 30;
+            this.multiplierBg = this.scene.add.rectangle(
+                multiplierX, multiplierY, 180, 70, 0x000000, 0.7
+            )
+            .setOrigin(1, 0)
+            .setScrollFactor(0)
+            .setDepth(200);
+            this.multiplierLabel = this.scene.add.text(
+                multiplierX - 10, multiplierY + 15, '⚡ РИЗИК:', {
+                    fontSize: '16px',
+                    fill: '#FFFFFF',
+                    fontFamily: 'Arial, sans-serif',
+                    fontStyle: 'bold',
+                    stroke: '#000000',
+                    strokeThickness: 2
+                }
+            )
+            .setOrigin(1, 0.5)
+            .setScrollFactor(0)
+            .setDepth(201);
+            this.multiplierText = this.scene.add.text(
+                multiplierX - 10, multiplierY + 45, 'x1', {
+                    fontSize: '36px',
+                    fill: '#FFFFFF',
+                    fontFamily: 'Arial, sans-serif',
+                    fontStyle: 'bold',
+                    stroke: '#000000',
+                    strokeThickness: 3
+                }
+            )
+            .setOrigin(1, 0.5)
+            .setScrollFactor(0)
+            .setDepth(201);
         } catch (error) {
         }
     }
@@ -119,6 +156,23 @@ class HUD {
         } else {
             if (!this.moneyTextWarningShown) {
                 this.moneyTextWarningShown = true;
+            }
+        }
+        if (this.multiplierText && this.scene.getRiskMultiplier) {
+            const multiplier = this.scene.getRiskMultiplier();
+            this.multiplierText.setText(`x${multiplier}`);
+            if (multiplier === 5) {
+                this.multiplierText.setFill('#FF0000');
+                this.multiplierText.setScale(1.2);
+            } else if (multiplier === 3) {
+                this.multiplierText.setFill('#FF6600');
+                this.multiplierText.setScale(1.1);
+            } else if (multiplier === 2) {
+                this.multiplierText.setFill('#FFD700');
+                this.multiplierText.setScale(1.05);
+            } else {
+                this.multiplierText.setFill('#FFFFFF');
+                this.multiplierText.setScale(1);
             }
         }
         const stamina = this.player.getStamina();
@@ -186,6 +240,9 @@ class HUD {
         if (this.captureText) this.captureText.destroy();
         if (this.moneyText) this.moneyText.destroy();
         if (this.bonusIconsContainer) this.bonusIconsContainer.destroy();
+        if (this.multiplierText) this.multiplierText.destroy();
+        if (this.multiplierBg) this.multiplierBg.destroy();
+        if (this.multiplierLabel) this.multiplierLabel.destroy();
     }
 }
 export default HUD;

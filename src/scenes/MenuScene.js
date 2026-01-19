@@ -108,7 +108,17 @@ class MenuScene extends Phaser.Scene {
         settingsButton.setDepth(3);
         aboutButton.setDepth(3);
         donateButton.setDepth(3);
-        this.showClickToStartOverlay();
+        if (GAME_CONFIG.UI.SHOW_CLICK_TO_START) {
+            this.showClickToStartOverlay();
+        }
+        const shouldShowWelcome = GAME_CONFIG.UI.SHOW_WELCOME_POPUP && 
+            (GAME_CONFIG.UI.ALWAYS_SHOW_WELCOME_POPUP || !localStorage.getItem('welcomeShown'));
+        
+        if (shouldShowWelcome) {
+            this.time.delayedCall(800, () => {
+                this.showWelcomePopup();
+            });
+        }
     }
     showClickToStartOverlay() {
         if (this.sound.context && this.sound.context.state !== 'suspended') {
@@ -639,6 +649,123 @@ class MenuScene extends Phaser.Scene {
             closeButton.destroy();
             closeButton.shadow.destroy();
             closeButton.text.destroy();
+        });
+    }
+    showWelcomePopup() {
+        const { width, height } = this.scale;
+        const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7)
+            .setInteractive()
+            .setDepth(100);
+        const popupWidth = 620;
+        const popupHeight = 600;
+        const popupX = width / 2;
+        const popupY = height / 2;
+        const shadow = this.add.rectangle(popupX + 4, popupY + 4, popupWidth, popupHeight, 0x000000, 0.5);
+        shadow.setDepth(101);
+        const popup = this.add.rectangle(popupX, popupY, popupWidth, popupHeight, 0x808080, 0.95)
+            .setStrokeStyle(3, 0x606060);
+        popup.setDepth(102);
+        const title = this.add.text(popupX, popupY - 270, '🎮 БЕТА ВЕРСІЯ', {
+            fontSize: '30px',
+            fill: '#0057B7',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#FFD700',
+            strokeThickness: 4,
+            resolution: 2
+        }).setOrigin(0.5).setDepth(103);
+        const versionText = this.add.text(popupX, popupY - 230, GAME_CONFIG.VERSION, {
+            fontSize: '18px',
+            fill: '#333333',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            resolution: 2
+        }).setOrigin(0.5).setDepth(103);
+        const messageText = this.add.text(popupX, popupY - 15, 
+            '🏃 Ласкаво просимо до бета-версії гри!\n\n⚠️ Це БЕТА! Тут можуть бути баги, глюки, та всілякі дивні штуки. Якщо щось працює не так - не панікуй, це нормально! 😅\n\n💡 Знайшли баг? Є крута ідея? Створюй таску на GitHub!\n\nТам можна поскаржитись, запропонувати фічу, або просто сказати "шо це було?" 🤔\n\n🙏 Дякуємо що тестуєте і допомагаєте зробити гру кращою!', {
+            fontSize: '18px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif',
+            align: 'center',
+            lineSpacing: 8,
+            stroke: '#000000',
+            strokeThickness: 3,
+            resolution: 2,
+            wordWrap: { width: 560 }
+        }).setOrigin(0.5).setDepth(103);
+        const closeButtonShadow = this.add.rectangle(popupX + 2, popupY + 207, 320, 50, 0x000000, 0.5);
+        closeButtonShadow.setDepth(102);
+        const closeButton = this.add.rectangle(popupX, popupY + 205, 320, 50, 0x606060, 0.95)
+            .setInteractive({ useHandCursor: true })
+            .setStrokeStyle(2, 0x404040);
+        closeButton.setDepth(103);
+        const closeText = this.add.text(popupX, popupY + 205, 'Зрозумів!', {
+            fontSize: '20px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            resolution: 2
+        }).setOrigin(0.5).setDepth(104);
+        const githubButtonShadow = this.add.rectangle(popupX + 2, popupY + 262, 240, 40, 0x000000, 0.5);
+        githubButtonShadow.setDepth(102);
+        const githubButton = this.add.rectangle(popupX, popupY + 260, 240, 40, 0x606060, 0.95)
+            .setInteractive({ useHandCursor: true })
+            .setStrokeStyle(2, 0x404040);
+        githubButton.setDepth(103);
+        const githubText = this.add.text(popupX, popupY + 260, '🐛 GitHub Issues', {
+            fontSize: '16px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial, sans-serif',
+            resolution: 2
+        }).setOrigin(0.5).setDepth(104);
+        closeButton.on('pointerover', () => {
+            closeButton.setFillStyle(0x707070);
+            if (this.audioManager) {
+                this.audioManager.playSound('menu_hover', false, null, 'menu_hover', true);
+            }
+        });
+        closeButton.on('pointerout', () => {
+            closeButton.setFillStyle(0x606060);
+        });
+        githubButton.on('pointerover', () => {
+            githubButton.setFillStyle(0x707070);
+            if (this.audioManager) {
+                this.audioManager.playSound('menu_hover', false, null, 'menu_hover', true);
+            }
+        });
+        githubButton.on('pointerout', () => {
+            githubButton.setFillStyle(0x606060);
+        });
+        githubButton.on('pointerdown', () => {
+            if (this.audioManager) {
+                this.audioManager.playSound('menu_choise', false);
+            }
+            window.open(GAME_CONFIG.GITHUB_ISSUES_LINK, '_blank');
+        });
+        const closePopup = () => {
+            if (this.audioManager) {
+                this.audioManager.playSound('menu_choise', false);
+            }
+            localStorage.setItem('welcomeShown', 'true');
+            overlay.destroy();
+            shadow.destroy();
+            popup.destroy();
+            title.destroy();
+            versionText.destroy();
+            messageText.destroy();
+            githubButton.destroy();
+            githubButtonShadow.destroy();
+            githubText.destroy();
+            closeButton.destroy();
+            closeButtonShadow.destroy();
+            closeText.destroy();
+        };
+        closeButton.on('pointerdown', closePopup);
+        overlay.on('pointerdown', (pointer) => {
+            if (pointer.y > popupY + 280 || pointer.y < popupY - 280 ||
+                pointer.x < popupX - popupWidth / 2 || pointer.x > popupX + popupWidth / 2) {
+                closePopup();
+            }
         });
     }
 }

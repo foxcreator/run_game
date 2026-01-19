@@ -7,6 +7,7 @@ class ResultScene extends Phaser.Scene {
         this.currentBankedMoney = data.currentBankedMoney || 0;
         this.moneyAddedThisGame = data.moneyAddedThisGame || 0;
         this.timeSurvived = data.timeSurvived || 0;
+        this.survivalBonus = data.survivalBonus || 0;
         this.gameoverMusic = null;
     }
     create() {
@@ -54,7 +55,7 @@ class ResultScene extends Phaser.Scene {
             0x808080,
             0.9
         ).setStrokeStyle(3, 0x606060).setDepth(2);
-        const resultsY = menuBoxY - 80;
+        const resultsY = menuBoxY - 130;
         const lineSpacing = 60;
         let timeFormatted = '';
         const totalSeconds = Math.floor(this.timeSurvived);
@@ -91,9 +92,24 @@ class ResultScene extends Phaser.Scene {
                 strokeThickness: 2
             }
         ).setOrigin(0.5).setDepth(3);
+        if (this.survivalBonus > 0) {
+            const bonusText = this.add.text(
+                menuBoxX,
+                resultsY + lineSpacing * 2,
+                `🎁 Бонус за виживання: +$${this.survivalBonus}`,
+                {
+                    fontSize: '20px',
+                    fill: '#FFD700',
+                    fontFamily: 'Arial, sans-serif',
+                    fontStyle: 'bold',
+                    stroke: '#000000',
+                    strokeThickness: 2
+                }
+            ).setOrigin(0.5).setDepth(3);
+        }
         const timeText = this.add.text(
             menuBoxX,
-            resultsY + lineSpacing * 2,
+            resultsY + lineSpacing * (this.survivalBonus > 0 ? 3 : 2),
             `ЧАС ВИЖИВАННЯ: ${timeFormatted}`,
             {
                 fontSize: '28px',
@@ -104,12 +120,26 @@ class ResultScene extends Phaser.Scene {
                 strokeThickness: 3
             }
         ).setOrigin(0.5).setDepth(3);
-        const buttonWidth = 240;
+        const buttonWidth = 200;
         const buttonHeight = 60;
-        const buttonY = menuBoxY + 130;
+        const buttonSpacing = 110;
+        const topButtonY = menuBoxY + 60;
+        const bottomButtonY = menuBoxY + 130;
+        const wideButtonWidth = 420;
+        const playAgainButton = this.createMenuButton(
+            menuBoxX,
+            topButtonY,
+            wideButtonWidth,
+            buttonHeight,
+            'ГРАТИ ЗАНОВО',
+            () => {
+                this.stopGameoverMusic();
+                this.scene.start('GameScene');
+            }
+        );
         const shopButton = this.createMenuButton(
-            menuBoxX - 140,
-            buttonY,
+            menuBoxX - buttonSpacing,
+            bottomButtonY,
             buttonWidth,
             buttonHeight,
             'МАГАЗИН',
@@ -119,8 +149,8 @@ class ResultScene extends Phaser.Scene {
             }
         );
         const menuButton = this.createMenuButton(
-            menuBoxX + 140,
-            buttonY,
+            menuBoxX + buttonSpacing,
+            bottomButtonY,
             buttonWidth,
             buttonHeight,
             'МЕНЮ',
@@ -132,6 +162,7 @@ class ResultScene extends Phaser.Scene {
         background.setDepth(0);
         menuShadow.setDepth(2);
         menuBox.setDepth(2);
+        playAgainButton.setDepth(3);
         shopButton.setDepth(3);
         menuButton.setDepth(3);
     }
