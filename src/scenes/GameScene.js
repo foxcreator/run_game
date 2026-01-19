@@ -1,6 +1,4 @@
-// GameScene - основна сцена гри
 import Player from '../entities/Player.js';
-// v2.0 - оновлення для дебагу moneyText
 import HUD from '../ui/HUD.js';
 import Minimap from '../ui/Minimap.js';
 import CaptureSystem from '../systems/CaptureSystem.js';
@@ -16,27 +14,19 @@ import PaperStack from '../entities/PaperStack.js';
 import ChaserBlocker from '../entities/ChaserBlocker.js';
 import ChaserSticker from '../entities/ChaserSticker.js';
 import Coin from '../entities/Coin.js';
-// EnergyDrink не потрібен - енергетик вже реалізований в кіосках
-// Scooter та Joke видалено - вони були незрозумілі гравцям
 import SmokeCloud from '../entities/bonuses/SmokeCloud.js';
 import Scooter from '../entities/bonuses/Scooter.js';
 import Exchange from '../entities/Exchange.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
-
 class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
-        // Лічильник для циклічного вибору текстур авто
         this.carTextureIndex = 0;
     }
-    
     preload() {
-        // Завантажуємо текстуру кіоска (якщо не завантажена в BootScene)
         if (!this.textures.exists('kiosk')) {
             this.load.image('kiosk', './src/assets/textures/kiosk.png');
         }
-        
-        // Завантажуємо текстури авто (якщо не завантажені в BootScene)
         if (!this.textures.exists('car_red')) {
             this.load.image('car_red', './src/assets/textures/cars/red_car.png');
         }
@@ -44,66 +34,38 @@ class GameScene extends Phaser.Scene {
             this.load.image('car_white', './src/assets/textures/cars/white_car.png');
         }
     }
-
     create() {
-        // Розміри світу (1км x 1км = 4000x4000 пікселів, масштаб 1px = 0.25м)
         this.worldWidth = 4000;
         this.worldHeight = 4000;
-        
-        // Встановлюємо межі світу для фізики
         this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
-
-        // Створюємо tilemap систему
         try {
             this.tilemap = new TilemapSystem(this);
         } catch (error) {
-            // Показуємо помилку на екрані з деталями
             const errorText = `Помилка завантаження карти:\n${error.message}`;
-            this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2, 
+            this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2,
                 errorText, { fontSize: '20px', fill: '#ff0000', align: 'center' })
                 .setOrigin(0.5);
             return;
         }
-        
-        // Створюємо систему обходу перешкод (pathfinding) - для сумісності зі старим кодом
         this.pathfindingSystem = new PathfindingSystem(this.tilemap);
-        
-        // Створюємо навігаційну систему з єдиним grid (для нової AI)
         this.navigationSystem = new NavigationSystem(this.tilemap);
-
-        // Знаходимо прохідний тайл для старту гравця (біля центру)
         const startPos = this.findWalkablePosition(this.worldWidth / 2, this.worldHeight / 2);
         this.player = new Player(this, startPos.x, startPos.y);
-        
-        // Ініціалізуємо час останнього зіткнення з кіоском
         this.player.lastKioskCollisionTime = 0;
-        
-        // Налаштовуємо камеру для слідкування за гравцем
         this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
-        this.cameras.main.startFollow(this.player, true, 0.1, 0.1); // Плавне слідкування
-        this.cameras.main.setDeadzone(100, 100); // Мертва зона для плавнішого руху
-        
-        // Створюємо систему захоплення
+        this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+        this.cameras.main.setDeadzone(100, 100);
         this.captureSystem = new CaptureSystem(this);
-        
-        // Створюємо аудіо менеджер
         this.audioManager = new AudioManager(this);
-        
-        // Створюємо HUD (залишаємо на фіксованій позиції екрану)
-        // HUD створюється після tilemap, щоб бути поверх кіосків
         this.hud = new HUD(this);
-        
         try {
             this.hud.create(this.player);
         } catch (error) {
         }
-        
-        // ЯКЩО moneyText не створено - створюємо його вручну
         if (!this.hud.moneyText) {
             const barX = 50;
-            const captureBarY = 50 + 40 + 40; // barY + dashBarY offset + captureBarY offset
+            const captureBarY = 50 + 40 + 40;
             const moneyY = captureBarY + 40;
-            
             const moneyText = this.add.text(barX, moneyY, 'Зароблено: $0 | Банк: $0', {
                 fontSize: '18px',
                 fill: '#ffffff',
@@ -113,200 +75,107 @@ class GameScene extends Phaser.Scene {
             }).setOrigin(0, 0.5)
             .setScrollFactor(0)
             .setDepth(202);
-            
-            // ВАЖЛИВО: присвоюємо moneyText до HUD
             this.hud.moneyText = moneyText;
-            
-            // ВАЖЛИВО: переконаємося, що this.scene встановлено в HUD
             if (!this.hud.scene) {
                 this.hud.scene = this;
             }
         }
-        
         this.hud.setCaptureSystem(this.captureSystem);
-        
-        // Створюємо міні-карту
         try {
             this.minimap = new Minimap(this, this.tilemap, this.player);
         } catch (error) {
             this.minimap = null;
         }
-        
-        // Масив переслідувачів (ворогів)
         this.chasers = [];
-        
-        // Створюємо початкових ворогів
         this.spawnInitialChasers();
-        
-        // Масив перешкод
         this.obstacles = [];
-        
-        // Масив пікапів (монети та бонуси)
         this.pickups = [];
-        
-        // Масив обмінників
         this.exchanges = [];
-        
-        // Система збереження
         this.saveSystem = new SaveSystem();
-        // Зберігаємо початковий баланс банку для обчислення прибутку за гру
         this.initialBankedMoney = this.saveSystem.getBankedMoney();
         this.bankedMoney = this.initialBankedMoney;
-        
-        // Створюємо обмінники на карті (постійне розміщення)
         this.spawnExchanges();
-        
-        // Додаємо обмінники до перешкод для колізій (після створення)
         for (const exchange of this.exchanges) {
             this.obstacles.push(exchange);
         }
-        
-        // Створюємо перешкоди на карті
         this.spawnObstacles();
-        
-        // Налаштовуємо колізії між гравцем та перешкодами (включає обмінники)
         this.setupObstacleCollisions();
-        
-        // Налаштовуємо колізії між автомобілями та ворогами
         this.setupCarCollisions();
-        
-        // Налаштовуємо колізії між гравцем та пікапами
         this.setupPickupCollisions();
-        
-        // Налаштовуємо колізії між гравцем та обмінниками
         this.setupExchangeCollisions();
-        
-        // Колізії з ворогами перевіряються вручну в update() для Sticker
-        
-        // Ініціалізуємо та запускаємо музику
         if (this.audioManager.init()) {
             this.audioManager.startMusic();
         }
-        
-        // Передаємо audioManager в Player для звукових ефектів (напряму через властивість)
         if (this.player) {
             this.player.audioManager = this.audioManager;
         }
-        
-        // Ініціалізація таймера для поліцейської сирени
         const sirenConfig = GAME_CONFIG.AUDIO.POLICE_SIREN;
         this.nextSirenTime = this.time.now + Phaser.Math.Between(sirenConfig.MIN_INTERVAL, sirenConfig.MAX_INTERVAL);
-        
-        // Запускаємо амбієнтні звуки
         this.initAmbienceSounds();
-        
-        // Гроші за забіг
         this.runMoney = 0;
-        
-        // Лічильник загальної кількості створених монет (для визначення номіналу)
         this.totalCoinsSpawned = 0;
-        
-        // Таймер для процедурного спавну пікапів
         this.pickupSpawnTimer = 0;
-        this.pickupSpawnInterval = 1000; // Перевірка кожну секунду
-        
-        // Таймери респавну для бонусів
-        this.lastSmokeCloudPickupTime = 0; // Час останнього підбору хмарки
-        this.lastScooterPickupTime = 0;    // Час останнього підбору скутера
-        
-        // Спавн початкових пікапів (монети та бонуси)
+        this.pickupSpawnInterval = 1000;
+        this.lastSmokeCloudPickupTime = 0;
+        this.lastScooterPickupTime = 0;
         this.spawnPickups();
-        
-        // Таймер виживання
         this.timeSurvived = 0;
         this.score = 0;
-        
-        // Стан паузи
         this.isPaused = false;
         this.pauseMenu = null;
-        this.autoPausedByBlur = false; // Прапорець автоматичної паузи при втраті фокусу
-        
-        // Налаштовуємо обробник ESC для паузи
+        this.autoPausedByBlur = false;
         this.setupPauseControls();
-        
-        // Додаємо обробник shutdown для очищення при виході зі сцени
         this.events.once('shutdown', this.shutdown, this);
-        
-        // Оптимізація: throttling для перерахунку шляхів (не більше N за tick)
-        this.pathRecalculationQueue = []; // Черга ворогів для перерахунку шляху
-        this.maxPathRecalculationsPerTick = 3; // Максимум перерахунків за один tick (для 2-20 ворогів)
+        this.pathRecalculationQueue = [];
+        this.maxPathRecalculationsPerTick = 3;
     }
-    
     setupPauseControls() {
-        // Створюємо об'єкт для клавіші ESC
         this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
-        this.inSettingsMenu = false; // Прапорець що ми в налаштуваннях
-        
-        // Обробник натискання ESC
+        this.inSettingsMenu = false;
         this.escKey.on('down', () => {
             if (this.inSettingsMenu) {
-                // Якщо в налаштуваннях - повертаємось в меню паузи
                 this.closeSettingsMenu();
             } else if (!this.isPaused && !this.captureSystem?.isMaxed()) {
-                // Ставимо на паузу
                 this.pauseGame();
             } else if (this.isPaused) {
-                // Знімаємо з паузи
                 this.resumeGame();
             }
         });
-        
-        // Автоматична пауза при втраті фокусу вікна
         this.game.events.on('blur', this.handleWindowBlur, this);
         this.game.events.on('focus', this.handleWindowFocus, this);
-        
-        // Альтернативно можна використати hidden/visible для табів
         this.game.events.on('hidden', this.handleWindowBlur, this);
         this.game.events.on('visible', this.handleWindowFocus, this);
     }
-    
     handleWindowBlur() {
-        // Вікно втратило фокус - автоматично ставимо на паузу
         if (!this.isPaused && !this.captureSystem?.isMaxed()) {
             this.pauseGame();
-            this.autoPausedByBlur = true; // Позначаємо що пауза автоматична
+            this.autoPausedByBlur = true;
         }
     }
-    
     handleWindowFocus() {
-        // Вікно отримало фокус - НЕ знімаємо паузу автоматично
-        // Гравець сам вирішить коли продовжити гру
         if (this.autoPausedByBlur) {
             this.autoPausedByBlur = false;
         }
     }
-    
     pauseGame() {
         if (this.isPaused) return;
-        
         this.isPaused = true;
         this.physics.pause();
-        
-        // Зупиняємо музику та звуки
         if (this.audioManager) {
             this.audioManager.pauseMusic();
             this.audioManager.pauseSounds();
         }
-        
-        // Створюємо меню паузи
         this.createPauseMenu();
     }
-    
     resumeGame() {
         if (!this.isPaused) return;
-        
         this.isPaused = false;
         this.physics.resume();
-        
-        // Відновлюємо музику та звуки
         if (this.audioManager) {
             this.audioManager.resumeMusic();
             this.audioManager.resumeSounds();
         }
-        
-        // Видаляємо меню паузи та overlay
         if (this.pauseMenu) {
-            // Видаляємо overlay якщо він є
             if (this.pauseMenu.overlay) {
                 this.pauseMenu.overlay.destroy();
             }
@@ -314,26 +183,16 @@ class GameScene extends Phaser.Scene {
             this.pauseMenu = null;
         }
     }
-    
     createPauseMenu() {
-        if (this.pauseMenu) return; // Меню вже існує
-        
+        if (this.pauseMenu) return;
         const { width, height } = this.cameras.main;
-        
-        // Напівпрозорий чорний фон (створюємо окремо, не в контейнері, щоб покривав весь екран)
         const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7);
         overlay.setDepth(1000);
-        overlay.setScrollFactor(0); // Не рухається з камерою
-        
-        // Створюємо контейнер для меню паузи
+        overlay.setScrollFactor(0);
         this.pauseMenu = this.add.container(width / 2, height / 2);
         this.pauseMenu.setDepth(1001);
-        this.pauseMenu.setScrollFactor(0); // Не рухається з камерою
-        
-        // Зберігаємо overlay в контейнері для подальшого видалення
+        this.pauseMenu.setScrollFactor(0);
         this.pauseMenu.overlay = overlay;
-        
-        // Заголовок "ПАУЗА"
         const title = this.add.text(0, -180, 'ПАУЗА', {
             fontSize: '72px',
             fill: '#FFFFFF',
@@ -343,66 +202,44 @@ class GameScene extends Phaser.Scene {
             strokeThickness: 4
         }).setOrigin(0.5).setScrollFactor(0);
         this.pauseMenu.add(title);
-        
-        // Блок меню
         const menuBoxWidth = 400;
         const menuBoxHeight = 280;
         const menuBox = this.add.rectangle(0, 0, menuBoxWidth, menuBoxHeight, 0x808080, 0.9);
         menuBox.setStrokeStyle(3, 0x606060);
         menuBox.setScrollFactor(0);
         this.pauseMenu.add(menuBox);
-        
-        // Кнопки
         const buttonWidth = 300;
         const buttonHeight = 60;
         const buttonSpacing = 70;
         const startY = -buttonSpacing;
-        
-        // Кнопка "ПРОДОВЖИТИ"
         const resumeButton = this.createPauseButton(0, startY, buttonWidth, buttonHeight, 'ПРОДОВЖИТИ', () => {
             this.resumeGame();
         });
         this.pauseMenu.add(resumeButton);
-        
-        // Кнопка "НАЛАШТУВАННЯ"
         const settingsButton = this.createPauseButton(0, startY + buttonSpacing, buttonWidth, buttonHeight, 'НАЛАШТУВАННЯ', () => {
-            // Показуємо меню налаштувань
             this.createPauseSettingsMenu();
         });
         this.pauseMenu.add(settingsButton);
-        
-        // Кнопка "ЗБЕРЕГТИ І ВИЙТИ"
         const saveAndExitButton = this.createPauseButton(0, startY + buttonSpacing * 2, buttonWidth, buttonHeight, 'ЗБЕРЕГТИ І ВИЙТИ', () => {
-            // Гроші вже зберігаються через SaveSystem автоматично
-            // Зупиняємо музику
             if (this.audioManager) {
                 this.audioManager.stopMusic();
             }
-            // Просто виходимо в меню
-            this.resumeGame(); // Знімаємо паузу перед виходом
+            this.resumeGame();
             this.scene.start('MenuScene');
         });
         this.pauseMenu.add(saveAndExitButton);
     }
-    
     createPauseButton(x, y, width, height, text, callback) {
-        // Створюємо контейнер для кнопки (щоб всі елементи рухалися разом)
         const buttonContainer = this.add.container(x, y);
         buttonContainer.setScrollFactor(0);
-        
-        // Тінь
         const shadow = this.add.rectangle(2, 2, width, height, 0x000000, 0.5);
         shadow.setScrollFactor(0);
         buttonContainer.add(shadow);
-        
-        // Кнопка
         const button = this.add.rectangle(0, 0, width, height, 0x606060, 0.95)
             .setInteractive({ useHandCursor: true })
             .setStrokeStyle(2, 0x404040)
             .setScrollFactor(0);
         buttonContainer.add(button);
-        
-        // Текст
         const buttonText = this.add.text(0, 0, text, {
             fontSize: '24px',
             fill: '#FFFFFF',
@@ -412,10 +249,7 @@ class GameScene extends Phaser.Scene {
             strokeThickness: 2
         }).setOrigin(0.5).setScrollFactor(0);
         buttonContainer.add(buttonText);
-        
-        // Hover ефект
         button.on('pointerover', () => {
-            // Зупиняємо попередній hover звук якщо він грає
             if (this.audioManager) {
                 const existingHover = this.audioManager.getSound('menu_hover_current');
                 if (existingHover && existingHover.isPlaying) {
@@ -426,67 +260,47 @@ class GameScene extends Phaser.Scene {
             button.setFillStyle(0x707070);
             buttonContainer.setScale(1.05);
         });
-        
         button.on('pointerout', () => {
             button.setFillStyle(0x606060);
             buttonContainer.setScale(1);
         });
-        
         button.on('pointerdown', () => {
-            // Відтворюємо звук кліку
             if (this.audioManager) {
                 this.audioManager.playSound('menu_choise', false);
             }
             if (callback) callback();
         });
-        
-        // Зберігаємо посилання для можливого видалення
         buttonContainer.button = button;
         buttonContainer.shadow = shadow;
         buttonContainer.text = buttonText;
-        
         return buttonContainer;
     }
-    
     createPauseSettingsMenu() {
         const { width, height } = this.cameras.main;
-        
-        // Прапорець що ми в налаштуваннях
         this.inSettingsMenu = true;
-        
-        // Приховуємо меню паузи (але НЕ видаляємо overlay!)
-        // Overlay створюється окремо, тому просто приховуємо контейнер меню
         if (this.pauseMenu) {
             this.pauseMenu.setVisible(false);
         }
-        
-        // Створюємо меню налаштувань
         const settingsWidth = 550;
-        const settingsHeight = 480; // Зменшили висоту
+        const settingsHeight = 480;
         const settingsBoxX = width / 2;
         const settingsBoxY = height / 2;
-        
-        // Тінь
         const settingsShadow = this.add.rectangle(
-            settingsBoxX + 4, 
-            settingsBoxY + 4, 
-            settingsWidth, 
-            settingsHeight, 
-            0x000000, 
+            settingsBoxX + 4,
+            settingsBoxY + 4,
+            settingsWidth,
+            settingsHeight,
+            0x000000,
             0.4
         ).setScrollFactor(0).setDepth(1002);
-        
-        // Блок налаштувань
         const settingsBox = this.add.rectangle(
-            settingsBoxX, 
-            settingsBoxY, 
-            settingsWidth, 
-            settingsHeight, 
-            0x808080, 
+            settingsBoxX,
+            settingsBoxY,
+            settingsWidth,
+            settingsHeight,
+            0x808080,
             0.9
         ).setStrokeStyle(3, 0x606060).setScrollFactor(0).setDepth(1002);
-        
-        // Заголовок
         const title = this.add.text(settingsBoxX, settingsBoxY - 150, 'НАЛАШТУВАННЯ', {
             fontSize: '48px',
             fill: '#FFFFFF',
@@ -495,8 +309,6 @@ class GameScene extends Phaser.Scene {
             stroke: '#000000',
             strokeThickness: 4
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
-        
-        // === МУЗИКА ===
         const musicLabelY = settingsBoxY - 100;
         const musicLabel = this.add.text(settingsBoxX - 200, musicLabelY, 'МУЗИКА', {
             fontSize: '24px',
@@ -504,15 +316,10 @@ class GameScene extends Phaser.Scene {
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold'
         }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1003);
-        
-        // Слайдер гучності музики
         const sliderY = musicLabelY + 50;
         const sliderWidth = 320;
         const sliderHeight = 10;
-        
         const sliderStartX = settingsBoxX - 180;
-        
-        // Фон слайдера
         const musicSliderBg = this.add.rectangle(
             sliderStartX + sliderWidth / 2,
             sliderY,
@@ -520,8 +327,6 @@ class GameScene extends Phaser.Scene {
             sliderHeight,
             0x333333
         ).setScrollFactor(0).setDepth(1003);
-        
-        // Заповнення слайдера
         const currentVolume = this.audioManager ? this.audioManager.getMusicVolume() : 0.5;
         const musicSliderFill = this.add.rectangle(
             sliderStartX,
@@ -530,8 +335,6 @@ class GameScene extends Phaser.Scene {
             sliderHeight,
             0x00ff00
         ).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1004);
-        
-        // Повзунок
         const musicSliderHandle = this.add.circle(
             sliderStartX + sliderWidth * currentVolume,
             sliderY,
@@ -539,8 +342,6 @@ class GameScene extends Phaser.Scene {
             0xffffff
         ).setScrollFactor(0).setDepth(1005);
         musicSliderHandle.setInteractive({ draggable: true, useHandCursor: true });
-        
-        // Текст гучності (ліворуч від слайдера)
         const musicVolumeText = this.add.text(
             sliderStartX - 50,
             sliderY,
@@ -551,25 +352,18 @@ class GameScene extends Phaser.Scene {
                 fontFamily: 'Arial, sans-serif'
             }
         ).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
-        
-        // Обробник перетягування
         musicSliderHandle.on('drag', (pointer, dragX) => {
             const minX = sliderStartX;
             const maxX = sliderStartX + sliderWidth;
             const clampedX = Phaser.Math.Clamp(dragX, minX, maxX);
-            
             musicSliderHandle.x = clampedX;
-            
             const volume = (clampedX - minX) / sliderWidth;
             musicSliderFill.width = sliderWidth * volume;
             musicVolumeText.setText(`${Math.round(volume * 100)}%`);
-            
             if (this.audioManager) {
                 this.audioManager.setMusicVolume(volume);
             }
         });
-        
-        // Іконка вимкнення/увімкнення музики (справа від слайдера)
         const isMusicEnabled = this.audioManager ? this.audioManager.isMusicEnabled() : true;
         const musicToggleIcon = this.add.text(
             sliderStartX + sliderWidth + 40,
@@ -580,7 +374,6 @@ class GameScene extends Phaser.Scene {
             }
         ).setOrigin(0.5).setScrollFactor(0).setDepth(1003)
         .setInteractive({ useHandCursor: true });
-        
         musicToggleIcon.on('pointerover', () => {
             if (this.audioManager) {
                 const existingHover = this.audioManager.getSound('menu_hover_current');
@@ -590,7 +383,6 @@ class GameScene extends Phaser.Scene {
                 this.audioManager.playSound('menu_hover_current', false, null, 'menu_hover');
             }
         });
-        
         musicToggleIcon.on('pointerdown', () => {
             if (this.audioManager) {
                 this.audioManager.playSound('menu_choise', false);
@@ -599,8 +391,6 @@ class GameScene extends Phaser.Scene {
                 musicToggleIcon.setText(newState ? '🔊' : '🔇');
             }
         });
-        
-        // === ЗВУКИ ===
         const soundsLabelY = sliderY + 80;
         const soundsLabel = this.add.text(settingsBoxX - 200, soundsLabelY, 'ЗВУКИ', {
             fontSize: '24px',
@@ -608,11 +398,7 @@ class GameScene extends Phaser.Scene {
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold'
         }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1003);
-        
-        // Слайдер гучності звуків
         const soundsSliderY = soundsLabelY + 50;
-        
-        // Фон слайдера
         const soundsSliderBg = this.add.rectangle(
             sliderStartX + sliderWidth / 2,
             soundsSliderY,
@@ -620,8 +406,6 @@ class GameScene extends Phaser.Scene {
             sliderHeight,
             0x333333
         ).setScrollFactor(0).setDepth(1003);
-        
-        // Заповнення слайдера
         const currentSoundsVolume = this.audioManager ? this.audioManager.getSoundsVolume() : 0.7;
         const soundsSliderFill = this.add.rectangle(
             sliderStartX,
@@ -630,8 +414,6 @@ class GameScene extends Phaser.Scene {
             sliderHeight,
             0x00ff00
         ).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1004);
-        
-        // Повзунок
         const soundsSliderHandle = this.add.circle(
             sliderStartX + sliderWidth * currentSoundsVolume,
             soundsSliderY,
@@ -639,8 +421,6 @@ class GameScene extends Phaser.Scene {
             0xffffff
         ).setScrollFactor(0).setDepth(1005);
         soundsSliderHandle.setInteractive({ draggable: true, useHandCursor: true });
-        
-        // Текст гучності (ліворуч від слайдера)
         const soundsVolumeText = this.add.text(
             sliderStartX - 50,
             soundsSliderY,
@@ -651,25 +431,18 @@ class GameScene extends Phaser.Scene {
                 fontFamily: 'Arial, sans-serif'
             }
         ).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
-        
-        // Обробник перетягування
         soundsSliderHandle.on('drag', (pointer, dragX) => {
             const minX = sliderStartX;
             const maxX = sliderStartX + sliderWidth;
             const clampedX = Phaser.Math.Clamp(dragX, minX, maxX);
-            
             soundsSliderHandle.x = clampedX;
-            
             const volume = (clampedX - minX) / sliderWidth;
             soundsSliderFill.width = sliderWidth * volume;
             soundsVolumeText.setText(`${Math.round(volume * 100)}%`);
-            
             if (this.audioManager) {
                 this.audioManager.setSoundsVolume(volume);
             }
         });
-        
-        // Іконка вимкнення/увімкнення звуків (справа від слайдера)
         const isSoundsEnabled = this.audioManager ? this.audioManager.isSoundsEnabled() : true;
         const soundsToggleIcon = this.add.text(
             sliderStartX + sliderWidth + 40,
@@ -680,7 +453,6 @@ class GameScene extends Phaser.Scene {
             }
         ).setOrigin(0.5).setScrollFactor(0).setDepth(1003)
         .setInteractive({ useHandCursor: true });
-        
         soundsToggleIcon.on('pointerover', () => {
             if (this.audioManager) {
                 const existingHover = this.audioManager.getSound('menu_hover_current');
@@ -690,7 +462,6 @@ class GameScene extends Phaser.Scene {
                 this.audioManager.playSound('menu_hover_current', false, null, 'menu_hover');
             }
         });
-        
         soundsToggleIcon.on('pointerdown', () => {
             if (this.audioManager) {
                 this.audioManager.playSound('menu_choise', false);
@@ -699,8 +470,6 @@ class GameScene extends Phaser.Scene {
                 soundsToggleIcon.setText(newState ? '🔊' : '🔇');
             }
         });
-        
-        // Кнопка "НАЗАД"
         const closeButton = this.createPauseButton(
             settingsBoxX,
             settingsBoxY + 180,
@@ -713,8 +482,6 @@ class GameScene extends Phaser.Scene {
         );
         closeButton.setScrollFactor(0);
         closeButton.setDepth(1003);
-        
-        // Зберігаємо всі елементи для можливості їх видалення
         this.settingsMenuElements = {
             shadow: settingsShadow,
             box: settingsBox,
@@ -734,9 +501,7 @@ class GameScene extends Phaser.Scene {
             closeButton: closeButton
         };
     }
-    
     closeSettingsMenu() {
-                // Закриваємо меню налаштувань
         if (this.settingsMenuElements) {
             Object.values(this.settingsMenuElements).forEach(element => {
                 if (element && element.destroy) {
@@ -745,111 +510,78 @@ class GameScene extends Phaser.Scene {
             });
             this.settingsMenuElements = null;
         }
-        
-                // Показуємо меню паузи знову (overlay залишається видимим)
                 if (this.pauseMenu) {
                     this.pauseMenu.setVisible(true);
                 }
-        
-        // Знімаємо прапорець що ми в налаштуваннях
         this.inSettingsMenu = false;
     }
-    
     spawnExchanges() {
-        // Спавнимо обмінники на карті (постійне розміщення)
         const exchangeCount = GAME_CONFIG.EXCHANGES.COUNT;
-        const safeRadius = 200; // Безпечний радіус навколо гравця
-        
+        const safeRadius = 200;
         let spawned = 0;
         let attempts = 0;
         const maxAttempts = exchangeCount * 50;
-        
         while (spawned < exchangeCount && attempts < maxAttempts) {
             attempts++;
-            
-            // Генеруємо випадкову позицію по всій карті
             const x = Phaser.Math.Between(150, this.worldWidth - 150);
             const y = Phaser.Math.Between(150, this.worldHeight - 150);
-            
-            // Перевіряємо чи позиція не близько до гравця
             if (this.player) {
                 const distToPlayer = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
                 if (distToPlayer < safeRadius) {
                     continue;
                 }
             }
-            
-            // Перевіряємо чи позиція прохідна
             if (!this.tilemap.isWalkable(x, y)) {
                 continue;
             }
-            
-            // Перевіряємо ВСІ тайли, які покриває обмінник (не тільки кути!)
-            // Обмінник має розмір 60x60 пікселів, тайл - 32x32, тому обмінник покриває ~2x2 тайли
             const exchangeWidth = 60;
             const exchangeHeight = 60;
             const halfWidth = exchangeWidth / 2;
             const halfHeight = exchangeHeight / 2;
-            
-            // Визначаємо діапазон тайлів, які покриває обмінник
             const minTileX = Math.floor((x - halfWidth) / this.tilemap.tileSize);
             const maxTileX = Math.floor((x + halfWidth) / this.tilemap.tileSize);
             const minTileY = Math.floor((y - halfHeight) / this.tilemap.tileSize);
             const maxTileY = Math.floor((y + halfHeight) / this.tilemap.tileSize);
-            
-            // Перевіряємо всі тайли в діапазоні
             let allTilesValid = true;
             for (let tileY = minTileY; tileY <= maxTileY; tileY++) {
                 for (let tileX = minTileX; tileX <= maxTileX; tileX++) {
-                    // Перевіряємо чи координати в межах карти
-                    if (tileX < 0 || tileX >= this.tilemap.mapWidth || 
+                    if (tileX < 0 || tileX >= this.tilemap.mapWidth ||
                         tileY < 0 || tileY >= this.tilemap.mapHeight) {
                         allTilesValid = false;
                         break;
                     }
-                    
-                    // Отримуємо тип тайла з tileTypeMap
                     let tileType = null;
-                    if (this.tilemap.tileTypeMap && 
-                        this.tilemap.tileTypeMap[tileY] && 
+                    if (this.tilemap.tileTypeMap &&
+                        this.tilemap.tileTypeMap[tileY] &&
                         this.tilemap.tileTypeMap[tileY][tileX] !== undefined) {
                         tileType = this.tilemap.tileTypeMap[tileY][tileX];
                     } else {
                         allTilesValid = false;
                         break;
                     }
-                    
-                    // Дозволяємо тільки тротуари (SIDEWALK = 1, жовтий) та траву (YARD = 2, зелений)
-                    // Виключаємо дороги (ROAD = 0, сірий), будівлі, кіоски та огорожі
-                    if (tileType !== this.tilemap.TILE_TYPES.SIDEWALK && 
+                    if (tileType !== this.tilemap.TILE_TYPES.SIDEWALK &&
                         tileType !== this.tilemap.TILE_TYPES.YARD) {
                         allTilesValid = false;
-                        break; // Якщо хоча б один тайл на дорозі - пропускаємо
+                        break;
                     }
                 }
                 if (!allTilesValid) break;
             }
-            
             if (!allTilesValid) {
-                continue; // Не спавнимо якщо хоча б один тайл на дорозі або будівлі
+                continue;
             }
-            
-            // Перевіряємо чи немає обмінників поруч
             let tooClose = false;
             for (const exchange of this.exchanges) {
                 const distance = Phaser.Math.Distance.Between(x, y, exchange.x, exchange.y);
-                const minDistance = 300; // Мінімальна відстань між обмінниками
+                const minDistance = 300;
                 if (distance < minDistance) {
                     tooClose = true;
                     break;
                 }
             }
-            
             if (tooClose) {
                 continue;
             }
-            
-            // Перевіряємо чи немає перешкод поруч (включаючи кіоски)
             for (const obstacle of this.obstacles) {
                 const distance = Phaser.Math.Distance.Between(x, y, obstacle.x, obstacle.y);
                 if (distance < 100) {
@@ -857,8 +589,6 @@ class GameScene extends Phaser.Scene {
                     break;
                 }
             }
-            
-            // Перевіряємо чи немає кіосків поруч
             if (this.tilemap.activeKiosks) {
                 for (const kiosk of this.tilemap.activeKiosks) {
                     const distance = Phaser.Math.Distance.Between(x, y, kiosk.worldX, kiosk.worldY);
@@ -868,8 +598,6 @@ class GameScene extends Phaser.Scene {
                     }
                 }
             }
-            
-            // Перевіряємо чи немає пікапів поруч
             for (const pickup of this.pickups) {
                 if (pickup && pickup.active) {
                     const distance = Phaser.Math.Distance.Between(x, y, pickup.x, pickup.y);
@@ -879,12 +607,9 @@ class GameScene extends Phaser.Scene {
                     }
                 }
             }
-            
             if (tooClose) {
                 continue;
             }
-            
-            // Створюємо обмінник
             try {
                 const exchange = new Exchange(this, x, y);
                 this.exchanges.push(exchange);
@@ -893,75 +618,52 @@ class GameScene extends Phaser.Scene {
             }
         }
     }
-    
     spawnObstacles() {
-        // Спавнимо різні типи перешкод на карті
         const obstacleCounts = {
-            'PuddleSlip': 0,    // Калюжі генеруються окремо
-            'TapeGate': 0,       // Стрічки/шлагбауми видалено - рожеві блоки не потрібні
-            'Car': 0      // Автомобілі генеруються окремо
-            // PaperStack видалено - білі блоки не потрібні
+            'PuddleSlip': 0,
+            'TapeGate': 0,
+            'Car': 0
         };
-        
-        // Безпечний радіус навколо гравця
         const safeRadius = 90;
-        
-        // Спавнимо кожен тип перешкод
         for (const [type, count] of Object.entries(obstacleCounts)) {
-            if (count === 0) continue; // Пропускаємо калюжі
-            
+            if (count === 0) continue;
             let spawned = 0;
             let attempts = 0;
             const maxAttempts = count * 20;
-            
             while (spawned < count && attempts < maxAttempts) {
                 attempts++;
-                
-                // Генеруємо випадкову позицію
                 const x = Phaser.Math.Between(100, this.worldWidth - 100);
                 const y = Phaser.Math.Between(100, this.worldHeight - 100);
-                
-                // Перевіряємо чи позиція не близько до гравця
                 if (this.player) {
                     const distToPlayer = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
                     if (distToPlayer < safeRadius) {
                         continue;
                     }
                 }
-                
-                // Перевіряємо чи позиція прохідна
                 if (!this.tilemap.isWalkable(x, y)) {
                     continue;
                 }
-                
-                // Перевіряємо чи немає перешкод поруч
                 let tooClose = false;
                 for (const obstacle of this.obstacles) {
                     const distance = Phaser.Math.Distance.Between(x, y, obstacle.x, obstacle.y);
-                    const minDistance = 150; // Мінімальна відстань між перешкодами
+                    const minDistance = 150;
                     if (distance < minDistance) {
                         tooClose = true;
                         break;
                     }
                 }
-                
                 if (tooClose) {
                     continue;
                 }
-                
-                // Створюємо перешкоду відповідного типу
                 let obstacle;
                 try {
                     switch (type) {
                         case 'TapeGate':
                             obstacle = new TapeGate(this, x, y);
                             break;
-                        // PaperStack видалено - білі блоки не потрібні
-                        // SoftCrowd (черги людей) видалено - червоні блоки не потрібні
                         default:
                             continue;
                     }
-                    
                     if (obstacle) {
                         this.obstacles.push(obstacle);
                         spawned++;
@@ -970,24 +672,14 @@ class GameScene extends Phaser.Scene {
                 }
             }
         }
-        
-        // Генеруємо калюжі окремо (тільки на дорогах/тротуарах)
         this.spawnPuddles();
-        
-        // Налаштовуємо таймер для оновлення калюж
         this.puddleUpdateTimer = 0;
         this.puddleUpdateInterval = GAME_CONFIG.OBSTACLES.PUDDLE_SLIP.RESPAWN_INTERVAL;
-        
-        // Генеруємо автомобілі окремо
         this.spawnCars();
-        
-        // Налаштовуємо таймер для спавну нових авто
         this.carSpawnTimer = 0;
-        this.carSpawnInterval = 1000; // Інтервал спавну авто (1 секунда)
+        this.carSpawnInterval = 1000;
     }
-    
     spawnPuddles() {
-        // Видаляємо всі існуючі калюжі
         const puddlesToRemove = this.obstacles.filter(obs => obs instanceof PuddleSlip);
         for (const puddle of puddlesToRemove) {
             if (puddle.active) {
@@ -998,58 +690,40 @@ class GameScene extends Phaser.Scene {
                 this.obstacles.splice(index, 1);
             }
         }
-        
-        // Генеруємо нову кількість калюж
         const minCount = GAME_CONFIG.OBSTACLES.PUDDLE_SLIP.MIN_COUNT;
         const maxCount = GAME_CONFIG.OBSTACLES.PUDDLE_SLIP.MAX_COUNT;
         const targetCount = Phaser.Math.Between(minCount, maxCount);
-        
         const sizeOptions = GAME_CONFIG.OBSTACLES.PUDDLE_SLIP.SIZE_OPTIONS;
         const tileSize = 32;
-        
         let spawned = 0;
         let attempts = 0;
-        const maxAttempts = targetCount * 50; // Більше спроб для доріг/тротуарів
-        
+        const maxAttempts = targetCount * 50;
         while (spawned < targetCount && attempts < maxAttempts) {
             attempts++;
-            
-            // Вибираємо випадковий розмір
             const sizeInTiles = Phaser.Math.RND.pick(sizeOptions);
-            
-            // Генеруємо випадкову позицію
             const x = Phaser.Math.Between(50, this.worldWidth - 50);
             const y = Phaser.Math.Between(50, this.worldHeight - 50);
-            
-            // Перевіряємо чи вся область (розмір калюжі) є дорогою або тротуаром
             if (!this.tilemap.isAreaRoadOrSidewalk(x, y, sizeInTiles)) {
                 continue;
             }
-            
-            // Перевіряємо чи позиція не близько до гравця
             if (this.player) {
                 const distToPlayer = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
                 if (distToPlayer < 100) {
                     continue;
                 }
             }
-            
-            // Перевіряємо чи немає інших перешкод поруч
             let tooClose = false;
             for (const obstacle of this.obstacles) {
-                if (obstacle instanceof PuddleSlip) continue; // Ігноруємо інші калюжі
+                if (obstacle instanceof PuddleSlip) continue;
                 const distance = Phaser.Math.Distance.Between(x, y, obstacle.x, obstacle.y);
                 if (distance < 100) {
                     tooClose = true;
                     break;
                 }
             }
-            
             if (tooClose) {
                 continue;
             }
-            
-            // Створюємо калюжу
             try {
                 const puddle = new PuddleSlip(this, x, y, sizeInTiles);
                 if (puddle) {
@@ -1059,19 +733,13 @@ class GameScene extends Phaser.Scene {
             } catch (error) {
             }
         }
-        
     }
-    
     spawnCars() {
-        // Перевіряємо чи текстури завантажені
         const carTextures = GAME_CONFIG.OBSTACLES.MOVING_BUS.CAR_TEXTURES || [];
         const availableTextures = carTextures.filter(key => this.textures.exists(key));
-        
         if (availableTextures.length === 0) {
             return;
         }
-        
-        // Видаляємо всі існуючі авто
         const carsToRemove = this.obstacles.filter(obs => obs instanceof Car);
         for (const car of carsToRemove) {
             if (car.active) {
@@ -1082,42 +750,30 @@ class GameScene extends Phaser.Scene {
                 this.obstacles.splice(index, 1);
             }
         }
-        
-        // Генеруємо початкову кількість авто
         const minCount = GAME_CONFIG.OBSTACLES.MOVING_BUS.MIN_COUNT;
         const maxCount = GAME_CONFIG.OBSTACLES.MOVING_BUS.MAX_COUNT;
         const targetCount = Phaser.Math.Between(minCount, maxCount);
-        
         for (let i = 0; i < targetCount; i++) {
             this.spawnSingleCar();
         }
     }
-    
     spawnSingleCar() {
         if (!this.tilemap) {
             return false;
         }
-        
-        // Шукаємо випадкову позицію на дорозі
         let attempts = 0;
         const maxAttempts = 200;
         let spawnX, spawnY;
         let foundRoad = false;
-        
         const config = GAME_CONFIG.OBSTACLES.MOVING_BUS;
         const minDistanceFromOtherCars = config.MIN_DISTANCE_BETWEEN_CARS || 60;
-        
         while (attempts < maxAttempts && !foundRoad) {
             attempts++;
-            
             spawnX = Phaser.Math.Between(50, this.worldWidth - 50);
             spawnY = Phaser.Math.Between(50, this.worldHeight - 50);
-            
             if (!this.tilemap.isRoad(spawnX, spawnY) || this.tilemap.hasCollision(spawnX, spawnY)) {
                 continue;
             }
-            
-            // Перевіряємо чи немає інших авто поруч
             let tooCloseToOtherCar = false;
             const existingCars = this.obstacles.filter(obs => obs instanceof Car && obs.active);
             for (const car of existingCars) {
@@ -1127,29 +783,20 @@ class GameScene extends Phaser.Scene {
                     break;
                 }
             }
-            
             if (!tooCloseToOtherCar) {
                 foundRoad = true;
             }
         }
-        
         if (!foundRoad) {
             return false;
         }
-        
-        // Отримуємо текстуру по черзі
         const carTextures = GAME_CONFIG.OBSTACLES.MOVING_BUS.CAR_TEXTURES || [];
         const availableTextures = carTextures.filter(key => this.textures.exists(key));
-        
         if (availableTextures.length === 0) {
             return false;
         }
-        
-        // Обираємо текстуру по черзі (циклічно)
         const textureKey = availableTextures[this.carTextureIndex % availableTextures.length];
         this.carTextureIndex++;
-        
-        // Створюємо авто на дорозі
         try {
             const car = new Car(this, spawnX, spawnY, textureKey);
             if (car) {
@@ -1158,12 +805,9 @@ class GameScene extends Phaser.Scene {
             }
         } catch (error) {
         }
-        
         return false;
     }
-    
     setupObstacleCollisions() {
-        // Налаштовуємо колізії між гравцем та перешкодами
         this.physics.add.overlap(
             this.player,
             this.obstacles,
@@ -1172,195 +816,125 @@ class GameScene extends Phaser.Scene {
             this
         );
     }
-    
     setupPickupCollisions() {
-        // Налаштовуємо колізії між гравцем та пікапами (монетами)
-        // Це буде викликатися при оновленні пікапів
     }
-    
     setupExchangeCollisions() {
-        // Налаштовуємо колізії між гравцем та обмінниками
-        // Використовуємо collide (не overlap) щоб блокувати рух гравця
         if (this.exchanges && this.exchanges.length > 0) {
             this.physics.add.collider(
                 this.player,
                 this.exchanges,
-                null, // Без callback - просто блокуємо рух
+                null,
                 null,
                 this
             );
         }
     }
-    
     handlePickupCollision(player, pickup) {
         if (!pickup || !pickup.active || pickup.collected) return;
-        
-        // Позначаємо як зібраний щоб не збирати двічі
         pickup.collected = true;
-        
-        // Якщо це монета
         if (pickup instanceof Coin && pickup.value !== undefined) {
-            // Додаємо гроші
             this.runMoney += pickup.value;
-            
-            // Відтворюємо звук підбору грошей
             if (this.audioManager) {
                 this.audioManager.playSound('money_pickup', false, null, 'money');
             }
-            
-            // Видаляємо монету
             pickup.collect();
-            
-            // Видаляємо з масиву
             const index = this.pickups.indexOf(pickup);
             if (index > -1) {
                 this.pickups.splice(index, 1);
             }
         }
-        // Якщо це бонус
         else if (pickup.applyEffect) {
-            // Відтворюємо звук підбору бонуса
             if (this.audioManager && this.cache.audio.exists('pickup')) {
                 this.audioManager.playSound('pickup_bonus', false, 0.6, 'pickup');
             }
-            
-            // Застосовуємо ефект бонусу
             pickup.applyEffect(player, this);
-            
-            // Зберігаємо час підбору для затримки респавну
             if (pickup.bonusType === 'SMOKE_CLOUD') {
                 this.lastSmokeCloudPickupTime = this.time.now;
             } else if (pickup.bonusType === 'SCOOTER') {
                 this.lastScooterPickupTime = this.time.now;
             }
-            
-            // Видаляємо бонус
             pickup.collect();
-            
-            // Видаляємо з масиву
             const index = this.pickups.indexOf(pickup);
             if (index > -1) {
                 this.pickups.splice(index, 1);
             }
         }
     }
-    
     handleObstacleCollision(player, obstacle) {
         if (!obstacle.active) return;
-        
-        // Спеціальна обробка для автомобілів
         if (obstacle instanceof Car) {
             obstacle.onCollisionWithEntity(player);
             return;
         }
-        
-        // Викликаємо метод обробки колізії перешкоди
         if (obstacle.onPlayerCollision) {
             obstacle.onPlayerCollision(player);
         }
     }
-    
     setupCarCollisions() {
-        // Налаштовуємо колізії між автомобілями та ворогами
-        // Цей метод буде викликатися в update() для перевірки колізій
     }
-    
     handleCarChaserCollision(car, chaser) {
         if (!car.active || !chaser || !chaser.active) return;
-        
-        // Автомобіль відкидає ворога
         car.onCollisionWithEntity(chaser);
     }
-    
     checkCarCollisions() {
-        // Перевіряємо колізії між авто та гравцем/ворогами
         const cars = this.obstacles.filter(obs => obs instanceof Car && obs.active);
-        
         if (cars.length === 0) return;
-        
         const config = GAME_CONFIG.OBSTACLES.MOVING_BUS;
         const carCollisionRadius = config.COLLISION_RADIUS || 25;
-        
-        // Колізії між авто (ДТП)
         for (let i = 0; i < cars.length; i++) {
             const car1 = cars[i];
             if (!car1.active || car1.isAccident) continue;
-            
             for (let j = i + 1; j < cars.length; j++) {
                 const car2 = cars[j];
                 if (!car2.active || car2.isAccident) continue;
-                
                 const distance = Phaser.Math.Distance.Between(car1.x, car1.y, car2.x, car2.y);
-                const minDistance = carCollisionRadius * 2; // Радіус двох авто
-                
+                const minDistance = carCollisionRadius * 2;
                 if (distance < minDistance) {
-                    // ДТП!
                     car1.handleAccident(car2);
                 }
             }
         }
-        
-        // Колізії з гравцем (вже обробляються через handleObstacleCollision)
-        // Колізії з ворогами
         for (const car of cars) {
-            if (!car.active || car.isAccident) continue; // Пропускаємо авто в ДТП
-            
-            // Перевіряємо колізію з гравцем
+            if (!car.active || car.isAccident) continue;
             if (this.player && this.player.active && !this.player.isFrozen) {
                 const distance = Phaser.Math.Distance.Between(car.x, car.y, this.player.x, this.player.y);
-                const minDistance = 40; // Радіус авто + радіус гравця
+                const minDistance = 40;
                 if (distance < minDistance) {
                     car.onCollisionWithEntity(this.player);
                 }
             }
-            
-            // Перевіряємо колізії з ворогами
             for (const chaser of this.chasers) {
                 if (!chaser || !chaser.active || chaser.isFrozen) continue;
-                
                 const distance = Phaser.Math.Distance.Between(car.x, car.y, chaser.x, chaser.y);
-                const minDistance = 40; // Радіус авто + радіус ворога
+                const minDistance = 40;
                 if (distance < minDistance) {
                     car.onCollisionWithEntity(chaser);
                 }
             }
         }
     }
-    
     spawnInitialChasers() {
-        // Спочатку спавнимо початкових ворогів
         const initialCount = GAME_CONFIG.CHASERS.SPAWN.INITIAL_COUNT;
-        
-        // Розподіляємо ворогів між типами (50% Blocker, 50% Sticker)
         const blockerCount = Math.floor(initialCount / 2);
         const stickerCount = initialCount - blockerCount;
-        
-        // Створюємо Blockers
         for (let i = 0; i < blockerCount; i++) {
             const chaser = this.spawnChaser('Blocker');
             if (!chaser) {
             }
         }
-        
-        // Створюємо Stickers
         for (let i = 0; i < stickerCount; i++) {
             const chaser = this.spawnChaser('Sticker');
             if (!chaser) {
             }
         }
     }
-    
     spawnChaser(type) {
-        // Знаходимо позицію для спавну (подалі від гравця)
         const spawnConfig = GAME_CONFIG.CHASERS.SPAWN;
         let attempts = 0;
         const maxAttempts = spawnConfig.MAX_SPAWN_ATTEMPTS;
         let spawnX, spawnY;
-        
         while (attempts < maxAttempts) {
             attempts++;
-            
-            // Генеруємо позицію на відстані від гравця
             const angle = Math.random() * Math.PI * 2;
             const distance = Phaser.Math.Between(
                 spawnConfig.MIN_DISTANCE_FROM_PLAYER,
@@ -1368,19 +942,13 @@ class GameScene extends Phaser.Scene {
             );
             spawnX = this.player.x + Math.cos(angle) * distance;
             spawnY = this.player.y + Math.sin(angle) * distance;
-            
-            // Перевіряємо межі світу
             if (spawnX < 50 || spawnX > this.worldWidth - 50 ||
                 spawnY < 50 || spawnY > this.worldHeight - 50) {
                 continue;
             }
-            
-            // Перевіряємо чи позиція прохідна
             if (!this.tilemap.isWalkable(spawnX, spawnY)) {
                 continue;
             }
-            
-            // Перевіряємо чи немає інших ворогів поруч
             let tooClose = false;
             for (const chaser of this.chasers) {
                 if (chaser && chaser.active) {
@@ -1391,40 +959,27 @@ class GameScene extends Phaser.Scene {
                     }
                 }
             }
-            
             if (tooClose) {
                 continue;
             }
-            
-            // Знайшли валідну позицію
             break;
         }
-        
         if (attempts >= maxAttempts) {
-            // Не знайшли позицію - використовуємо позицію гравця + відстань
             const angle = Math.random() * Math.PI * 2;
             const distance = (spawnConfig.MIN_DISTANCE_FROM_PLAYER + spawnConfig.MAX_DISTANCE_FROM_PLAYER) / 2;
             spawnX = this.player.x + Math.cos(angle) * distance;
             spawnY = this.player.y + Math.sin(angle) * distance;
-            
-            // Перевіряємо межі світу для fallback позиції
             spawnX = Phaser.Math.Clamp(spawnX, 50, this.worldWidth - 50);
             spawnY = Phaser.Math.Clamp(spawnY, 50, this.worldHeight - 50);
-            
-            // Якщо fallback позиція теж не прохідна, шукаємо найближчу прохідну
             if (!this.tilemap.isWalkable(spawnX, spawnY)) {
                 const fallbackPos = this.findWalkablePosition(spawnX, spawnY);
                 spawnX = fallbackPos.x;
                 spawnY = fallbackPos.y;
             }
         }
-        
-        // Перевіряємо чи позиція все ще валідна перед створенням
         if (!this.tilemap.isWalkable(spawnX, spawnY)) {
             return null;
         }
-        
-        // Створюємо ворога
         let chaser;
         if (type === 'Blocker') {
             chaser = new ChaserBlocker(this, spawnX, spawnY);
@@ -1434,219 +989,138 @@ class GameScene extends Phaser.Scene {
         } else {
             return null;
         }
-        
         chaser.setTarget(this.player);
-        chaser.setPathfindingSystem(this.pathfindingSystem); // Для сумісності
-        
-        // Встановлюємо NavigationSystem (якщо метод існує)
+        chaser.setPathfindingSystem(this.pathfindingSystem);
         if (chaser.setNavigationSystem && this.navigationSystem) {
             chaser.setNavigationSystem(this.navigationSystem);
         }
-        
-        // Передаємо audioManager для звукових ефектів
         if (this.audioManager) {
             chaser.audioManager = this.audioManager;
         }
-        
-        // Додаємо в масив
         this.chasers.push(chaser);
-        
         return chaser;
     }
-    
-    
     findWalkablePosition(centerX, centerY) {
-        // Шукаємо прохідний тайл біля центру
-        const searchRadius = 50; // Радіус пошуку в тайлах
+        const searchRadius = 50;
         const tile = this.tilemap.worldToTile(centerX, centerY);
-        
-        // Спочатку перевіряємо центр
         if (this.tilemap.isWalkable(centerX, centerY)) {
             return { x: centerX, y: centerY };
         }
-        
-        // Якщо центр не прохідний, шукаємо по спіралі
         for (let radius = 1; radius <= searchRadius; radius++) {
             for (let dx = -radius; dx <= radius; dx++) {
                 for (let dy = -radius; dy <= radius; dy++) {
-                    // Перевіряємо тільки периметр поточного радіусу
                     if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-                    
                     const checkTile = { x: tile.x + dx, y: tile.y + dy };
                     const worldPos = this.tilemap.tileToWorld(checkTile.x, checkTile.y);
-                    
                     if (this.tilemap.isWalkable(worldPos.x, worldPos.y)) {
                         return worldPos;
                     }
                 }
             }
         }
-        
-        // Якщо не знайшли, повертаємо центр
         return { x: centerX, y: centerY };
     }
-    
     update(time, delta) {
-        // Якщо гра на паузі - не оновлюємо нічого
         if (this.isPaused) {
             return;
         }
-        
-        // Оновлення гравця
         if (this.player) {
             this.player.update(time, delta);
-            
-            // Перевірка колізій гравця з тайлами
             this.checkTilemapCollisions();
         }
-        
-        // Оновлення системи захоплення
         if (this.captureSystem && this.player) {
             this.captureSystem.update(delta, this.player, this.chasers);
-            
-            // Перевірка програшу (capture досяг 100)
             if (this.captureSystem.isMaxed()) {
                 this.handleGameOver();
             }
         }
-        
-        // Перевірка поліцейської сирени
         this.checkPoliceSiren(time);
-        
-        // Оновлення звуку річки (на основі близькості до води)
         this.updateRiverSound();
-        
-        // Оновлення таймера виживання
-        this.timeSurvived += delta / 1000; // в секундах
-        
-        // Оновлення перешкод
+        this.timeSurvived += delta / 1000;
         for (const obstacle of this.obstacles) {
             if (obstacle.active && obstacle.update) {
                 obstacle.update(delta);
             }
         }
-        
-        // Оновлення пікапів (монет) з магнітним ефектом
         for (const pickup of this.pickups) {
             if (pickup.active && pickup.update) {
                 pickup.update(delta, this.player);
             }
         }
-        
-        // Процедурний спавн пікапів (підтримка кількості)
         this.pickupSpawnTimer += delta;
         if (this.pickupSpawnTimer >= this.pickupSpawnInterval) {
             this.pickupSpawnTimer = 0;
             this.maintainPickups();
         }
-        
-        // Cleanup пікапів позаду гравця
         this.cleanupPickups();
-        
-        // Перевірка колізій з пікапами (використовуємо відстань для надійності)
         if (this.pickups.length > 0 && this.player) {
-            const pickupRadius = 40; // Радіус збору (більший ніж hitbox)
-            
+            const pickupRadius = 40;
             for (let i = this.pickups.length - 1; i >= 0; i--) {
                 const pickup = this.pickups[i];
                 if (!pickup || !pickup.active || pickup.collected) continue;
-                
-                // Перевіряємо відстань до гравця
                 const dx = this.player.x - pickup.x;
                 const dy = this.player.y - pickup.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                // Якщо гравець достатньо близько - збираємо пікап
                 if (distance < pickupRadius) {
                     this.handlePickupCollision(this.player, pickup);
                 }
             }
         }
-        
-        // Перевірка колізій з обмінниками
-        // Збільшуємо радіус для зручності підходу з будь-якої сторони
         if (this.exchanges.length > 0 && this.player && !this.player.isFrozen) {
-            const exchangeRadius = 70; // Збільшений радіус взаємодії (було 50)
-            
+            const exchangeRadius = 70;
             for (const exchange of this.exchanges) {
                 if (!exchange || !exchange.active) continue;
-                
-                // Перевіряємо відстань до гравця (з усіх сторін)
                 const dx = this.player.x - exchange.x;
                 const dy = this.player.y - exchange.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                // Якщо гравець достатньо близько - обмінюємо гроші
                 if (distance < exchangeRadius) {
                     exchange.exchange(this.player, this);
                 }
             }
         }
-        
-        // Оновлення ворогів з throttling перерахунку шляхів
-        // Спочатку збираємо ворогів, яким потрібен перерахунок
         this.pathRecalculationQueue = [];
         for (const chaser of this.chasers) {
             if (chaser && chaser.active && typeof chaser.shouldRecalculatePath === 'function') {
-                // Перевіряємо чи потрібен перерахунок
                 if (chaser.shouldRecalculatePath(time)) {
                     this.pathRecalculationQueue.push(chaser);
                 }
             }
         }
-        
-        // Перераховуємо шляхи з обмеженням кількості за tick
         const recalculationsThisTick = Math.min(
-            this.pathRecalculationQueue.length, 
+            this.pathRecalculationQueue.length,
             this.maxPathRecalculationsPerTick
         );
-        
-        // Перемішуємо чергу для справедливого розподілу
         this.pathRecalculationQueue.sort(() => Math.random() - 0.5);
-        
         for (let i = 0; i < recalculationsThisTick; i++) {
             const chaser = this.pathRecalculationQueue[i];
             if (chaser && chaser.active && typeof chaser.calculatePath === 'function') {
                 chaser.calculatePath(time);
             }
         }
-        
-        // Оновлення ворогів
         for (const chaser of this.chasers) {
             if (chaser && chaser.active) {
-                // Обчислюємо separation force перед оновленням (якщо метод існує)
                 if (typeof chaser.calculateSeparationForce === 'function') {
                     chaser.calculateSeparationForce(this.chasers);
                 }
-                
-                // Оновлюємо ворога з передачею часу
                 if (typeof chaser.update === 'function') {
                     chaser.update(delta, time);
                 }
-                
-                // Перевіряємо колізії ворогів з тайлами карти
                 this.checkChaserTilemapCollisions(chaser);
                 this.checkChaserChaserCollisions(chaser);
-                
-                // Перевіряємо колізії з гравцем для Sticker (удари) ВРУЧНУ
                 if (chaser.type === 'Sticker' && this.player && this.player.active && !this.player.isFalling) {
                     const distance = Phaser.Math.Distance.Between(
                         this.player.x, this.player.y,
                         chaser.x, chaser.y
                     );
-                    // Якщо Sticker торкається гравця - завдає удар
-                    const hitDistance = 35; // Відстань для удару (трохи менше ніж розмір body)
+                    const hitDistance = 35;
                     if (distance < hitDistance && chaser.onHitPlayer) {
                         chaser.onHitPlayer();
                     }
                 }
             }
         }
-        
-        // Оновлення HUD
         if (this.hud) {
             this.hud.update();
-            // Переконаємося, що HUD завжди поверх всього
             this.children.bringToTop(this.hud.staminaBarBg);
             this.children.bringToTop(this.hud.staminaBar);
             this.children.bringToTop(this.hud.staminaText);
@@ -1663,19 +1137,12 @@ class GameScene extends Phaser.Scene {
                 this.children.bringToTop(this.hud.bonusIconsContainer);
             }
         }
-        
-        // Оновлення міні-карти
         if (this.minimap) {
             this.minimap.update();
         }
-        
-        
-        // Оновлення видимості тайлів (culling для оптимізації)
         if (this.tilemap && this.tilemap.updateVisibility) {
             this.tilemap.updateVisibility(time);
         }
-        
-        // Оновлення калюж кожні 30 секунд
         if (this.puddleUpdateTimer !== undefined) {
             this.puddleUpdateTimer += delta;
             if (this.puddleUpdateTimer >= this.puddleUpdateInterval) {
@@ -1683,47 +1150,32 @@ class GameScene extends Phaser.Scene {
                 this.spawnPuddles();
             }
         }
-        
-        // Оновлення автомобілів та спавн нових
         if (this.carSpawnTimer !== undefined) {
             this.carSpawnTimer += delta;
-            
-            // Перевіряємо кількість активних авто (тільки ті що дійсно існують та рухаються)
             const activeCars = this.obstacles.filter(obs => {
                 if (!(obs instanceof Car)) return false;
                 if (!obs.active) return false;
-                // Перевіряємо чи авто дійсно існує та має body
                 if (!obs.body || !obs.scene) return false;
                 return true;
             });
-            
             const minCars = GAME_CONFIG.OBSTACLES.MOVING_BUS.MIN_COUNT;
             const maxCars = GAME_CONFIG.OBSTACLES.MOVING_BUS.MAX_COUNT;
-            
-            // Якщо менше мінімуму - спавнимо одразу (але не більше 1 за кадр)
             if (activeCars.length < minCars && this.carSpawnTimer >= 100) {
                 this.spawnSingleCar();
                 this.carSpawnTimer = 0;
             }
-            // Якщо менше максимуму та пройшов інтервал - спавнимо нове авто
             else if (activeCars.length < maxCars && this.carSpawnTimer >= this.carSpawnInterval) {
                 this.carSpawnTimer = 0;
                 this.spawnSingleCar();
             }
         }
-        
-        // Перевіряємо колізії авто з гравцем та ворогами
         this.checkCarCollisions();
     }
-    
     checkChaserTilemapCollisions(chaser) {
         if (!this.tilemap || !chaser) return;
-        
         const chaserX = chaser.x;
         const chaserY = chaser.y;
         const chaserRadius = GAME_CONFIG.CHASERS.COMMON.COLLISION_RADIUS;
-        
-        // Перевіряємо колізії ворога з тайлами
         const checkPoints = [
             { x: chaserX, y: chaserY },
             { x: chaserX + chaserRadius, y: chaserY },
@@ -1731,7 +1183,6 @@ class GameScene extends Phaser.Scene {
             { x: chaserX, y: chaserY + chaserRadius },
             { x: chaserX, y: chaserY - chaserRadius },
         ];
-        
         let hasCollision = false;
         for (const point of checkPoints) {
             if (this.tilemap.hasCollision(point.x, point.y)) {
@@ -1739,21 +1190,15 @@ class GameScene extends Phaser.Scene {
                 break;
             }
         }
-        
         if (hasCollision) {
-            // Блокуємо рух ворога в напрямку колізії
             const currentVelocityX = chaser.body.velocity.x;
             const currentVelocityY = chaser.body.velocity.y;
-            
-            // Перевіряємо горизонтальний рух
             if (currentVelocityX !== 0) {
                 const checkX = chaserX + (currentVelocityX > 0 ? chaserRadius : -chaserRadius);
                 if (this.tilemap.hasCollision(checkX, chaserY)) {
                     chaser.body.setVelocityX(0);
                 }
             }
-            
-            // Перевіряємо вертикальний рух
             if (currentVelocityY !== 0) {
                 const checkY = chaserY + (currentVelocityY > 0 ? chaserRadius : -chaserRadius);
                 if (this.tilemap.hasCollision(chaserX, checkY)) {
@@ -1762,7 +1207,6 @@ class GameScene extends Phaser.Scene {
             }
         }
     }
-    
     checkChaserChaserCollisions(chaser) {
         if (!chaser || !chaser.active) return;
         const minDistance = GAME_CONFIG.CHASERS.COMMON.MIN_DISTANCE_BETWEEN;
@@ -1794,51 +1238,36 @@ class GameScene extends Phaser.Scene {
             }
         }
     }
-    
     checkTilemapCollisions() {
         if (!this.tilemap || !this.player) return;
-        
-        // Якщо гравець заморожений, утримуємо його на місці
         if (this.player.isFrozen) {
-            // Під час заморозки утримуємо гравця на місці (вже відштовхнутому від кіоска)
             const frozenPos = this.player.getFrozenPosition();
             if (frozenPos) {
                 this.player.setPosition(frozenPos.x, frozenPos.y);
             }
             this.player.body.setVelocity(0, 0);
-            return; // Не перевіряємо інші колізії під час заморозки
+            return;
         }
-        
-        // Перевіряємо чи гравець не в колізійному тайлі
         const playerX = this.player.x;
         const playerY = this.player.y;
-        const playerRadius = 15; // Радіус гравця
-        
-        // Перевірка кількох точок навколо гравця для кращої колізії
+        const playerRadius = 15;
         const checkPoints = [
-            { x: playerX, y: playerY }, // Центр
-            { x: playerX + playerRadius, y: playerY }, // Право
-            { x: playerX - playerRadius, y: playerY }, // Ліво
-            { x: playerX, y: playerY + playerRadius }, // Низ
-            { x: playerX, y: playerY - playerRadius }, // Верх
+            { x: playerX, y: playerY },
+            { x: playerX + playerRadius, y: playerY },
+            { x: playerX - playerRadius, y: playerY },
+            { x: playerX, y: playerY + playerRadius },
+            { x: playerX, y: playerY - playerRadius },
         ];
-        
         let hasCollision = false;
         let isKioskCollision = false;
         let collidedKiosk = null;
-        
-        // Спочатку перевіряємо колізії з кіосками (перевіряємо відстань до всіх кіосків)
         if (this.tilemap.activeKiosks && this.tilemap.activeKiosks.length > 0) {
-            const kioskRadius = 20; // Радіус кіоска для колізії
-            const playerRadius = 15; // Радіус гравця
-            
+            const kioskRadius = 20;
+            const playerRadius = 15;
             for (const kiosk of this.tilemap.activeKiosks) {
                 if (!kiosk.sprite || !kiosk.sprite.active) continue;
-                
-                // Перевіряємо відстань від гравця до кіоска
                 const distance = Phaser.Math.Distance.Between(playerX, playerY, kiosk.worldX, kiosk.worldY);
                 const minDistance = kioskRadius + playerRadius;
-                
                 if (distance < minDistance) {
                     isKioskCollision = true;
                     hasCollision = true;
@@ -1847,125 +1276,80 @@ class GameScene extends Phaser.Scene {
                 }
             }
         }
-        
-        // Якщо немає колізії з кіоском, перевіряємо інші колізії
         if (!isKioskCollision) {
             for (const point of checkPoints) {
-                // Перевіряємо інші колізії (будівлі, вода)
                 if (this.tilemap.hasCollision(point.x, point.y)) {
                     hasCollision = true;
                     break;
                 }
             }
         }
-        
         if (isKioskCollision && collidedKiosk) {
-            // Використовуємо знайдений кіоск
             const kiosk = collidedKiosk;
-            
             if (kiosk) {
-                // Перевіряємо чи не було нещодавнього зіткнення з кіоском
                 const currentTime = this.time.now;
                 const timeSinceLastCollision = currentTime - this.player.lastKioskCollisionTime;
-                
-                // Якщо зіткнення з кіоском і минуло достатньо часу - заморожуємо
                 if (timeSinceLastCollision >= GAME_CONFIG.KIOSKS.COOLDOWN) {
-                    // Зберігаємо поточну позицію гравця (не відштовхуємо)
                     const currentPlayerX = this.player.x;
                     const currentPlayerY = this.player.y;
-                    
-                    // Поповнюємо стаміну до максимуму (купляємо енергетик)
                     this.player.restoreStamina();
-                    
-                    // Заморожуємо гравця на місці з звуком напою
-                    this.player.freeze(GAME_CONFIG.KIOSKS.FREEZE_DURATION, 'drink'); // Відтворюємо звук drink
+                    this.player.freeze(GAME_CONFIG.KIOSKS.FREEZE_DURATION, 'drink');
                     this.player.lastKioskCollisionTime = currentTime;
-                    
-                    // Блокуємо рух та залишаємо гравця на місці
                     this.player.body.setVelocity(0, 0);
                     this.player.setPosition(currentPlayerX, currentPlayerY);
-                    
-                    // Оновлюємо заморожену позицію
                     if (this.player.isFrozen) {
                         this.player.frozenPosition = { x: currentPlayerX, y: currentPlayerY };
                     }
-                    
-                    // Показуємо текст підказку
                     this.showKioskMessage('Енергію відновлено, біжимо далі!', currentPlayerX, currentPlayerY);
-                    
-                    // Плануємо зникнення кіоска (трохи раніше закінчення заморозки)
                     const disappearDelay = GAME_CONFIG.KIOSKS.FREEZE_DURATION - GAME_CONFIG.KIOSKS.DISAPPEAR_BEFORE_FREEZE_END;
                     const respawnDelay = GAME_CONFIG.KIOSKS.RESPAWN_DELAY;
-                    
-                    // Зникає кіоск
                     this.time.delayedCall(disappearDelay, () => {
                         this.removeKiosk(kiosk.tileX, kiosk.tileY);
                     });
-                    
-                    // Респавн кіоска через 20 секунд
                     this.time.delayedCall(disappearDelay + respawnDelay, () => {
                         this.tilemap.spawnKioskAtRandomPosition();
-                        // Оновлюємо міні-карту
                         if (this.minimap) {
                             this.minimap.refresh();
                         }
                     });
                 } else {
-                    // Якщо нещодавно було зіткнення, просто блокуємо рух без заморозки
                     this.player.body.setVelocity(0, 0);
                 }
             }
         } else if (hasCollision) {
-            // Для інших колізій (будівлі, огорожі) - блокуємо тільки напрямок, який веде в будівлю
             this.blockMovementIntoBuilding(playerX, playerY);
         }
     }
-    
     blockMovementIntoBuilding(playerX, playerY) {
-        // Блокуємо тільки той напрямок руху, який веде в будівлю
         const velocityX = this.player.body.velocity.x;
         const velocityY = this.player.body.velocity.y;
         const playerRadius = 15;
-        
         let blockedX = velocityX;
         let blockedY = velocityY;
-        
-        // Перевіряємо колізію в напрямку руху
         if (velocityX > 0) {
-            // Рух вправо - перевіряємо праву сторону
             if (this.tilemap.hasCollision(playerX + playerRadius, playerY)) {
                 blockedX = 0;
             }
         } else if (velocityX < 0) {
-            // Рух вліво - перевіряємо ліву сторону
             if (this.tilemap.hasCollision(playerX - playerRadius, playerY)) {
                 blockedX = 0;
             }
         }
-        
         if (velocityY > 0) {
-            // Рух вниз - перевіряємо нижню сторону
             if (this.tilemap.hasCollision(playerX, playerY + playerRadius)) {
                 blockedY = 0;
             }
         } else if (velocityY < 0) {
-            // Рух вгору - перевіряємо верхню сторону
             if (this.tilemap.hasCollision(playerX, playerY - playerRadius)) {
                 blockedY = 0;
             }
         }
-        
-        // Встановлюємо velocity тільки для дозволених напрямків
         this.player.body.setVelocity(blockedX, blockedY);
     }
-    
     removeKiosk(tileX, tileY) {
-        // Видаляємо кіоск
         this.tilemap.removeKiosk(tileX, tileY);
     }
-    
     showKioskMessage(text, x, y) {
-        // Створюємо текст над гравцем
         const messageText = this.add.text(x, y - 60, text, {
             fontSize: '20px',
             fill: '#00FF00',
@@ -1975,8 +1359,6 @@ class GameScene extends Phaser.Scene {
             strokeThickness: 4,
             align: 'center'
         }).setOrigin(0.5).setDepth(1000).setAlpha(0);
-        
-        // Анімація появи
         this.tweens.add({
             targets: messageText,
             alpha: 1,
@@ -1984,7 +1366,6 @@ class GameScene extends Phaser.Scene {
             duration: 300,
             ease: 'Power2',
             onComplete: () => {
-                // Тримаємо текст 2 секунди, потім зникає
                 this.time.delayedCall(2000, () => {
                     this.tweens.add({
                         targets: messageText,
@@ -2000,20 +1381,14 @@ class GameScene extends Phaser.Scene {
             }
         });
     }
-    
     pushPlayerAwayFromKiosk() {
-        // Відштовхуємо гравця від кіоска
         const playerX = this.player.x;
         const playerY = this.player.y;
-        
-        // Знаходимо найближчий кіоск
         let nearestKiosk = null;
         let minDistance = Infinity;
-        
         if (this.tilemap.activeKiosks && this.tilemap.activeKiosks.length > 0) {
             for (const kiosk of this.tilemap.activeKiosks) {
                 if (!kiosk.sprite || !kiosk.sprite.active) continue;
-                
                 const distance = Phaser.Math.Distance.Between(playerX, playerY, kiosk.worldX, kiosk.worldY);
                 if (distance < minDistance) {
                     minDistance = distance;
@@ -2021,51 +1396,36 @@ class GameScene extends Phaser.Scene {
                 }
             }
         }
-        
         if (!nearestKiosk) return;
-        
-        // Обчислюємо напрямок від кіоска до гравця
         const dx = playerX - nearestKiosk.worldX;
         const dy = playerY - nearestKiosk.worldY;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        
         if (distance === 0) return;
-        
-        // Нормалізуємо напрямок
         const dirX = dx / distance;
         const dirY = dy / distance;
-        
-        // Відштовхуємо гравця на відстань 40 пікселів від кіоска
         const pushDistance = 40;
-        const newX = nearestKiosk.worldX + dirX * (pushDistance + 20); // 20 - радіус кіоска
+        const newX = nearestKiosk.worldX + dirX * (pushDistance + 20);
         const newY = nearestKiosk.worldY + dirY * (pushDistance + 20);
-        
-        // Перевіряємо чи нова позиція прохідна
         if (this.tilemap.isWalkable(newX, newY)) {
             this.player.setPosition(newX, newY);
-            // Оновлюємо заморожену позицію
             if (this.player.isFrozen) {
                 this.player.frozenPosition = { x: newX, y: newY };
             }
         } else {
-            // Якщо напрямок не прохідний, шукаємо альтернативну позицію
             const tile = this.tilemap.worldToTile(playerX, playerY);
             const directions = [
-                { x: 0, y: -1 }, { x: 0, y: 1 },  // Верх, низ
-                { x: -1, y: 0 }, { x: 1, y: 0 }, // Ліво, право
-                { x: -1, y: -1 }, { x: 1, y: -1 }, // Діагоналі
+                { x: 0, y: -1 }, { x: 0, y: 1 },
+                { x: -1, y: 0 }, { x: 1, y: 0 },
+                { x: -1, y: -1 }, { x: 1, y: -1 },
                 { x: -1, y: 1 }, { x: 1, y: 1 }
             ];
-            
             for (let radius = 1; radius <= 3; radius++) {
                 for (const dir of directions) {
-                    const checkTile = { 
-                        x: tile.x + dir.x * radius, 
-                        y: tile.y + dir.y * radius 
+                    const checkTile = {
+                        x: tile.x + dir.x * radius,
+                        y: tile.y + dir.y * radius
                     };
                     const worldPos = this.tilemap.tileToWorld(checkTile.x, checkTile.y);
-                    
-                    // Перевіряємо чи це не кіоск і не інша колізія
                     let isKiosk = false;
                     if (this.tilemap.activeKiosks) {
                         for (const kiosk of this.tilemap.activeKiosks) {
@@ -2076,11 +1436,8 @@ class GameScene extends Phaser.Scene {
                         }
                     }
                     if (isKiosk) continue;
-                    
                     if (!this.tilemap.hasCollision(worldPos.x, worldPos.y)) {
-                        // Переміщуємо гравця на прохідну позицію
                         this.player.setPosition(worldPos.x, worldPos.y);
-                        // Оновлюємо заморожену позицію
                         if (this.player.isFrozen) {
                             this.player.frozenPosition = { x: worldPos.x, y: worldPos.y };
                         }
@@ -2090,64 +1447,45 @@ class GameScene extends Phaser.Scene {
             }
         }
     }
-    
     spawnPickups() {
         const config = GAME_CONFIG.PICKUPS;
-        
-        // Спавн монет (до максимуму з конфігу)
         const coinCount = config.COINS.MAX_COUNT_ON_MAP;
         for (let i = 0; i < coinCount; i++) {
             this.spawnCoin();
         }
-        
-        // Спавн скутерів (максимальна кількість, щоб розкинулись по карті)
         const scooterCount = config.SCOOTER.MAX_COUNT_ON_MAP;
         for (let i = 0; i < scooterCount; i++) {
             this.spawnScooter();
         }
-        
-        // Спавн димових хмарок (максимальна кількість, щоб розкинулись по карті)
         const smokeCount = config.SMOKE_CLOUD.MAX_COUNT_ON_MAP;
         for (let i = 0; i < smokeCount; i++) {
             this.spawnSmokeCloud();
         }
     }
-    
     spawnCoin() {
         let attempts = 0;
         const maxAttempts = 100;
-        
         while (attempts < maxAttempts) {
             attempts++;
-            
-            // Генеруємо випадкову позицію по всій карті (не тільки навколо гравця)
             const x = Phaser.Math.Between(100, this.worldWidth - 100);
             const y = Phaser.Math.Between(100, this.worldHeight - 100);
-            
-            // Перевіряємо чи позиція прохідна
             if (!this.tilemap.isWalkable(x, y)) {
                 continue;
             }
-            
-            // Перевіряємо чи тайл НЕ є будівлею (пікапи не можуть бути в будівлях)
             const tileType = this.tilemap.getTileType(x, y);
             if (tileType === this.tilemap.TILE_TYPES.BUILDING) {
-                continue; // Не спавнимо в будівлях
+                continue;
             }
-            
-            // Перевіряємо чи не дуже близько до інших пікапів (щоб не спавнити дуже близько)
             let tooClose = false;
             for (const pickup of this.pickups) {
                 if (pickup && pickup.active) {
                     const distance = Phaser.Math.Distance.Between(x, y, pickup.x, pickup.y);
-                    if (distance < 50) { // Мінімальна відстань між пікапами
+                    if (distance < 50) {
                         tooClose = true;
                         break;
                     }
                 }
             }
-            
-            // Перевіряємо чи не дуже близько до обмінників
             for (const exchange of this.exchanges) {
                 if (exchange && exchange.active) {
                     const distance = Phaser.Math.Distance.Between(x, y, exchange.x, exchange.y);
@@ -2157,8 +1495,6 @@ class GameScene extends Phaser.Scene {
                     }
                 }
             }
-            
-            // Перевіряємо чи не дуже близько до кіосків
             if (this.tilemap.activeKiosks) {
                 for (const kiosk of this.tilemap.activeKiosks) {
                     const distance = Phaser.Math.Distance.Between(x, y, kiosk.worldX, kiosk.worldY);
@@ -2168,91 +1504,57 @@ class GameScene extends Phaser.Scene {
                     }
                 }
             }
-            
             if (tooClose) {
                 continue;
             }
-            
-            // Визначаємо номінал монети згідно співвідношення
             const denomination = this.selectCoinDenomination();
-            
-            // Створюємо монету з визначеним номіналом
             const coin = new Coin(this, x, y, denomination);
             this.pickups.push(coin);
-            
-            // Збільшуємо лічильник загальної кількості монет
             this.totalCoinsSpawned++;
             return;
         }
     }
-    
-    /**
-     * Визначає номінал монети згідно співвідношення "один на N"
-     * @returns {Object} Об'єкт з value, color та texture
-     */
     selectCoinDenomination() {
         const denominations = GAME_CONFIG.PICKUPS.COINS.DENOMINATIONS;
-        
-        // Знаходимо базовий номінал (10 грн)
         const baseDenomination = denominations.find(d => d.value === 10);
-        
-        // Перевіряємо чи потрібно замінити на більший номінал
-        // Перевіряємо від найбільшого до найменшого (100 -> 50 -> 20)
         const higherDenominations = denominations
             .filter(d => d.value > 10)
-            .sort((a, b) => b.value - a.value); // Від більшого до меншого
-        
+            .sort((a, b) => b.value - a.value);
         for (const denom of higherDenominations) {
-            // Якщо загальна кількість монет ділиться націло на ratio - спавнимо цей номінал
             if (this.totalCoinsSpawned > 0 && this.totalCoinsSpawned % denom.ratio === 0) {
                 return denom;
             }
         }
-        
-        // Інакше повертаємо базовий номінал (10 грн)
         return baseDenomination;
     }
-    
     spawnScooter() {
         let attempts = 0;
         const maxAttempts = 100;
         const config = GAME_CONFIG.PICKUPS.SCOOTER;
-        
         while (attempts < maxAttempts) {
             attempts++;
-            
-            // Генеруємо випадкову позицію по всій карті
             const x = Phaser.Math.Between(100, this.worldWidth - 100);
             const y = Phaser.Math.Between(100, this.worldHeight - 100);
-            
-            // Перевіряємо чи позиція прохідна
             if (!this.tilemap.isWalkable(x, y)) {
                 continue;
             }
-            
-            // Перевіряємо чи тайл НЕ є будівлею
             const tileType = this.tilemap.getTileType(x, y);
             if (tileType === this.tilemap.TILE_TYPES.BUILDING) {
                 continue;
             }
-            
-            // Перевіряємо відстань до інших пікапів
             let tooClose = false;
             for (const pickup of this.pickups) {
                 if (pickup && pickup.active) {
                     const distance = Phaser.Math.Distance.Between(x, y, pickup.x, pickup.y);
-                    const minDistance = (pickup.bonusType === 'SCOOTER' || pickup.bonusType === 'SMOKE_CLOUD') 
-                        ? config.MIN_DISTANCE_BETWEEN 
+                    const minDistance = (pickup.bonusType === 'SCOOTER' || pickup.bonusType === 'SMOKE_CLOUD')
+                        ? config.MIN_DISTANCE_BETWEEN
                         : 50;
-                    
                     if (distance < minDistance) {
                         tooClose = true;
                         break;
                     }
                 }
             }
-            
-            // Перевіряємо відстань до обмінників
             for (const exchange of this.exchanges) {
                 if (exchange && exchange.active) {
                     const distance = Phaser.Math.Distance.Between(x, y, exchange.x, exchange.y);
@@ -2262,8 +1564,6 @@ class GameScene extends Phaser.Scene {
                     }
                 }
             }
-            
-            // Перевіряємо відстань до кіосків
             if (this.tilemap.activeKiosks) {
                 for (const kiosk of this.tilemap.activeKiosks) {
                     const distance = Phaser.Math.Distance.Between(x, y, kiosk.worldX, kiosk.worldY);
@@ -2273,58 +1573,42 @@ class GameScene extends Phaser.Scene {
                     }
                 }
             }
-            
             if (tooClose) {
                 continue;
             }
-            
-            // Створюємо скутер
             const scooter = new Scooter(this, x, y);
             this.pickups.push(scooter);
             return;
         }
     }
-    
     spawnSmokeCloud() {
         let attempts = 0;
         const maxAttempts = 100;
         const config = GAME_CONFIG.PICKUPS.SMOKE_CLOUD;
-        
         while (attempts < maxAttempts) {
             attempts++;
-            
-            // Генеруємо випадкову позицію по всій карті
             const x = Phaser.Math.Between(100, this.worldWidth - 100);
             const y = Phaser.Math.Between(100, this.worldHeight - 100);
-            
-            // Перевіряємо чи позиція прохідна
             if (!this.tilemap.isWalkable(x, y)) {
                 continue;
             }
-            
-            // Перевіряємо чи тайл НЕ є будівлею
             const tileType = this.tilemap.getTileType(x, y);
             if (tileType === this.tilemap.TILE_TYPES.BUILDING) {
                 continue;
             }
-            
-            // Перевіряємо відстань до інших пікапів
             let tooClose = false;
             for (const pickup of this.pickups) {
                 if (pickup && pickup.active) {
                     const distance = Phaser.Math.Distance.Between(x, y, pickup.x, pickup.y);
-                    const minDistance = (pickup.bonusType === 'SCOOTER' || pickup.bonusType === 'SMOKE_CLOUD') 
-                        ? config.MIN_DISTANCE_BETWEEN 
+                    const minDistance = (pickup.bonusType === 'SCOOTER' || pickup.bonusType === 'SMOKE_CLOUD')
+                        ? config.MIN_DISTANCE_BETWEEN
                         : 50;
-                    
                     if (distance < minDistance) {
                         tooClose = true;
                         break;
                     }
                 }
             }
-            
-            // Перевіряємо відстань до обмінників
             for (const exchange of this.exchanges) {
                 if (exchange && exchange.active) {
                     const distance = Phaser.Math.Distance.Between(x, y, exchange.x, exchange.y);
@@ -2334,8 +1618,6 @@ class GameScene extends Phaser.Scene {
                     }
                 }
             }
-            
-            // Перевіряємо відстань до кіосків
             if (this.tilemap.activeKiosks) {
                 for (const kiosk of this.tilemap.activeKiosks) {
                     const distance = Phaser.Math.Distance.Between(x, y, kiosk.worldX, kiosk.worldY);
@@ -2345,33 +1627,20 @@ class GameScene extends Phaser.Scene {
                     }
                 }
             }
-            
             if (tooClose) {
                 continue;
             }
-            
-            // Створюємо димову хмарку
             const smoke = new SmokeCloud(this, x, y);
             this.pickups.push(smoke);
             return;
         }
     }
-    
-    /**
-     * Підтримує кількість пікапів на карті (процедурний спавн)
-     * Монети та бонуси спавняться по всій карті до максимуму
-     */
     maintainPickups() {
         if (!this.player || !this.tilemap) return;
-        
         const config = GAME_CONFIG.PICKUPS;
-        
-        // Підраховуємо активні монети, скутери та димові хмарки
         const activeCoins = this.pickups.filter(p => p instanceof Coin && p.active);
         const activeScooters = this.pickups.filter(p => p.active && p.bonusType === 'SCOOTER');
         const activeSmokeClouds = this.pickups.filter(p => p.active && p.bonusType === 'SMOKE_CLOUD');
-        
-        // Підтримуємо монети (максимум з конфігу)
         const maxCoins = config.COINS.MAX_COUNT_ON_MAP;
         if (activeCoins.length < maxCoins) {
             const needed = maxCoins - activeCoins.length;
@@ -2379,8 +1648,6 @@ class GameScene extends Phaser.Scene {
                 this.spawnCoin();
             }
         }
-        
-        // Підтримуємо скутери (максимум з конфігу)
         const maxScooters = config.SCOOTER.MAX_COUNT_ON_MAP;
         if (activeScooters.length < maxScooters) {
             const needed = maxScooters - activeScooters.length;
@@ -2388,72 +1655,42 @@ class GameScene extends Phaser.Scene {
                 this.spawnScooter();
             }
         }
-        
-        // Підтримуємо димові хмарки (максимум з конфігу)
         const maxSmokeClouds = config.SMOKE_CLOUD.MAX_COUNT_ON_MAP;
         if (activeSmokeClouds.length < maxSmokeClouds) {
-            // Перевіряємо чи пройшла затримка з моменту останнього підбору/спавну
             const timeSinceLastPickup = this.time.now - this.lastSmokeCloudPickupTime;
             const respawnDelay = config.SMOKE_CLOUD.RESPAWN_DELAY;
-            
-            // Якщо затримка пройшла або це перший спавн - спавнимо ОДНУ хмарку
             if (timeSinceLastPickup >= respawnDelay || this.lastSmokeCloudPickupTime === 0) {
                 this.spawnSmokeCloud();
-                // Оновлюємо час для наступного спавну
                 this.lastSmokeCloudPickupTime = this.time.now;
             }
         }
     }
-    
-    /**
-     * Перевіряє чи потрібно відтворити поліцейську сирену
-     */
     checkPoliceSiren(time) {
         if (!this.player || !this.audioManager) return;
-        
-        // Перевіряємо чи настав час для сирени
         if (time < this.nextSirenTime) return;
-        
         const sirenConfig = GAME_CONFIG.AUDIO.POLICE_SIREN;
-        
-        // Перевіряємо чи є вороги поблизу гравця
         let enemiesNearby = 0;
-        
         for (const chaser of this.chasers) {
             if (!chaser || !chaser.active) continue;
-            
             const distance = Phaser.Math.Distance.Between(
                 this.player.x, this.player.y,
                 chaser.x, chaser.y
             );
-            
             if (distance < sirenConfig.ENEMY_CHECK_RADIUS) {
                 enemiesNearby++;
             }
         }
-        
-        // Якщо є достатньо ворогів поблизу - відтворюємо сирену
         if (enemiesNearby >= sirenConfig.MIN_ENEMIES_NEARBY) {
             this.audioManager.playSound('police_siren', false, sirenConfig.VOLUME);
-            
-            // Встановлюємо наступний час відтворення (рандомний інтервал)
             const nextInterval = Phaser.Math.Between(sirenConfig.MIN_INTERVAL, sirenConfig.MAX_INTERVAL);
             this.nextSirenTime = time + nextInterval;
         } else {
-            // Якщо ворогів недостатньо - перевіримо через 10 секунд
             this.nextSirenTime = time + 10000;
         }
     }
-    
-    /**
-     * Ініціалізує амбієнтні звуки
-     */
     initAmbienceSounds() {
         if (!this.sound) return;
-        
         const ambienceConfig = GAME_CONFIG.AUDIO.AMBIENCE;
-        
-        // Звук птахів - постійно грає
         if (this.cache.audio.exists('ambience_birds')) {
             this.ambienceBirds = this.sound.add('ambience_birds', {
                 volume: ambienceConfig.BIRDS_VOLUME,
@@ -2461,8 +1698,6 @@ class GameScene extends Phaser.Scene {
             });
             this.ambienceBirds.play();
         }
-        
-        // Звук вітру - постійно грає
         if (this.cache.audio.exists('ambience_wind')) {
             this.ambienceWind = this.sound.add('ambience_wind', {
                 volume: ambienceConfig.WIND_VOLUME,
@@ -2470,8 +1705,6 @@ class GameScene extends Phaser.Scene {
             });
             this.ambienceWind.play();
         }
-        
-        // Звук річки - грає з динамічною гучністю
         if (this.cache.audio.exists('ambience_river')) {
             this.ambienceRiver = this.sound.add('ambience_river', {
                 volume: 0,
@@ -2480,10 +1713,6 @@ class GameScene extends Phaser.Scene {
             this.ambienceRiver.play();
         }
     }
-    
-    /**
-     * Зупиняє амбієнтні звуки
-     */
     stopAmbienceSounds() {
         if (this.ambienceBirds) {
             this.ambienceBirds.stop();
@@ -2495,30 +1724,17 @@ class GameScene extends Phaser.Scene {
             this.ambienceRiver.stop();
         }
     }
-    
-    /**
-     * Оновлює гучність звуку річки на основі близькості до води
-     */
     updateRiverSound() {
         if (!this.ambienceRiver || !this.player || !this.tilemap) return;
-        
         const ambienceConfig = GAME_CONFIG.AUDIO.AMBIENCE;
-        
-        // Отримуємо позицію гравця в пікселях карти колізій
         const collisionMapX = Math.floor(this.player.x);
         const collisionMapY = Math.floor(this.player.y);
-        
-        // Шукаємо найближчий синій піксель (вода) в радіусі
         const searchRadius = ambienceConfig.RIVER_MAX_DISTANCE;
         let closestWaterDistance = Infinity;
-        
-        // Перевіряємо пікселі навколо гравця (оптимізовано - кожні 16 пікселів)
         for (let dx = -searchRadius; dx <= searchRadius; dx += 16) {
             for (let dy = -searchRadius; dy <= searchRadius; dy += 16) {
                 const checkX = collisionMapX + dx;
                 const checkY = collisionMapY + dy;
-                
-                // Перевіряємо чи це вода (синій колір на карті колізій)
                 if (this.tilemap.isWater && this.tilemap.isWater(checkX, checkY)) {
                     const distance = Math.sqrt(dx * dx + dy * dy);
                     if (distance < closestWaterDistance) {
@@ -2527,66 +1743,42 @@ class GameScene extends Phaser.Scene {
                 }
             }
         }
-        
-        // Обчислюємо гучність на основі відстані до води
         let volume = 0;
         if (closestWaterDistance < ambienceConfig.RIVER_MIN_DISTANCE) {
             volume = ambienceConfig.RIVER_MAX_VOLUME;
         } else if (closestWaterDistance < ambienceConfig.RIVER_MAX_DISTANCE) {
-            const ratio = (ambienceConfig.RIVER_MAX_DISTANCE - closestWaterDistance) / 
+            const ratio = (ambienceConfig.RIVER_MAX_DISTANCE - closestWaterDistance) /
                          (ambienceConfig.RIVER_MAX_DISTANCE - ambienceConfig.RIVER_MIN_DISTANCE);
             volume = ambienceConfig.RIVER_MAX_VOLUME * ratio;
         }
-        
         this.ambienceRiver.setVolume(volume);
     }
-    
-    /**
-     * Видаляє пікапи які далеко позаду гравця (cleanup для оптимізації)
-     */
     cleanupPickups() {
         if (!this.player) return;
-        
-        const cleanupDistance = 800; // Відстань позаду гравця для видалення
+        const cleanupDistance = 800;
         const playerX = this.player.x;
         const playerY = this.player.y;
-        
-        // Визначаємо напрямок руху гравця (приблизно)
         const velocityX = this.player.body ? this.player.body.velocity.x : 0;
         const velocityY = this.player.body ? this.player.body.velocity.y : 0;
-        
-        // Якщо гравець не рухається - не видаляємо
         if (Math.abs(velocityX) < 10 && Math.abs(velocityY) < 10) {
             return;
         }
-        
-        // Нормалізуємо напрямок руху
         const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
         if (speed < 10) return;
-        
         const dirX = velocityX / speed;
         const dirY = velocityY / speed;
-        
-        // Видаляємо пікапи позаду гравця
         for (let i = this.pickups.length - 1; i >= 0; i--) {
             const pickup = this.pickups[i];
             if (!pickup || !pickup.active) {
                 this.pickups.splice(i, 1);
                 continue;
             }
-            
-            // Вектор від гравця до пікапа
             const dx = pickup.x - playerX;
             const dy = pickup.y - playerY;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            // Якщо пікап далеко
             if (distance > cleanupDistance) {
-                // Перевіряємо чи він позаду гравця (скалярний добуток < 0)
                 const dotProduct = dx * dirX + dy * dirY;
-                
                 if (dotProduct < 0) {
-                    // Пікап позаду - видаляємо
                     if (pickup.body) {
                         pickup.body.destroy();
                     }
@@ -2596,24 +1788,15 @@ class GameScene extends Phaser.Scene {
             }
         }
     }
-    
     handleGameOver() {
-        // runMoney НЕ додається в банк (гроші згорають)
-        // Обміняні гроші вже додані через обмінники
-        
-        // Зупиняємо звук гравця
         if (this.player && this.player.audioManager) {
             const runningSound = this.player.audioManager.getSound('running');
             if (runningSound) {
                 runningSound.stop();
             }
         }
-        
-        // Зупиняємо всю музику та звуки
         if (this.audioManager) {
             this.audioManager.stopMusic();
-            
-            // Зупиняємо всі звуки через audioManager
             for (const soundKey in this.audioManager.sounds) {
                 const sound = this.audioManager.sounds[soundKey];
                 if (sound && sound.isPlaying) {
@@ -2621,11 +1804,7 @@ class GameScene extends Phaser.Scene {
                 }
             }
         }
-        
-        // Зупиняємо амбієнтні звуки
         this.stopAmbienceSounds();
-        
-        // Зупиняємо звуки двигунів автомобілів
         if (this.obstacles) {
             for (const obstacle of this.obstacles) {
                 if (obstacle && obstacle.engineSound) {
@@ -2633,8 +1812,6 @@ class GameScene extends Phaser.Scene {
                 }
             }
         }
-        
-        // Зупиняємо звуки ворогів
         if (this.chasers) {
             for (const chaser of this.chasers) {
                 if (chaser && chaser.audioManager) {
@@ -2645,27 +1822,17 @@ class GameScene extends Phaser.Scene {
                 }
             }
         }
-        
-        // Отримуємо поточний баланс банку та обчислюємо скільки додали за гру
         const currentBankedMoney = this.saveSystem.getBankedMoney();
         const moneyAddedThisGame = currentBankedMoney - (this.initialBankedMoney || 0);
-        
-        // Зберігаємо дані для передачі
         const resultData = {
             currentBankedMoney: currentBankedMoney,
             moneyAddedThisGame: moneyAddedThisGame,
             timeSurvived: this.timeSurvived
         };
-        
-        // ВАЖЛИВО: зупиняємо поточну сцену перед запуском нової
         this.scene.stop('GameScene');
-        
-        // Перехід до ResultScene з даними
         this.scene.start('ResultScene', resultData);
     }
-    
     shutdown() {
-        // Очищення обробників подій при виході зі сцени
         if (this.game && this.game.events) {
             this.game.events.off('blur', this.handleWindowBlur, this);
             this.game.events.off('focus', this.handleWindowFocus, this);
@@ -2674,5 +1841,4 @@ class GameScene extends Phaser.Scene {
         }
     }
 }
-
 export default GameScene;
