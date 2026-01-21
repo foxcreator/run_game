@@ -201,10 +201,8 @@ class GameScene extends Phaser.Scene {
 
             this.loadingScreen.updateProgress(1.0);
 
-            // Фінальна затримка
-            this.time.delayedCall(500, () => {
-                this.finalizeLoading();
-            });
+            // Відразу завершуємо завантаження без затримки
+            this.finalizeLoading();
 
         } catch (error) {
             console.error('[GameScene] Critical Initialization Error:', error);
@@ -231,7 +229,7 @@ class GameScene extends Phaser.Scene {
             this.loadingScreen = null;
         }
 
-        this.cameras.main.fadeIn(500, 0, 0, 0);
+        // Без fadeIn - одразу готові до гри
         this.isGameReady = true;
         this.isPaused = false;
         console.log('[GameScene] Ready!');
