@@ -185,10 +185,9 @@
     <div id="game-container"></div>
     
     <script>
-        // Перевірка на мобільний пристрій
+        // Перевірка на мобільний пристрій (тільки по user agent, без перевірки ширини)
         function isMobileDevice() {
-            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
-                || (window.innerWidth <= 768);
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         }
         
         // Показуємо повідомлення для мобільних або завантажуємо гру для десктопу

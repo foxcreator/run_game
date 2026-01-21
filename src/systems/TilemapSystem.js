@@ -56,63 +56,118 @@ class TilemapSystem {
     }
     loadCollisionMap() {
         if (!this.scene.textures.exists('collision_map')) {
+            console.warn('TilemapSystem: collision_map texture missing');
             this.initializeEmptyCollisionMap();
             return;
         }
+
         const texture = this.scene.textures.get('collision_map');
         const sourceImage = texture.getSourceImage();
+
         if (!sourceImage) {
+            console.warn('TilemapSystem: collision_map source image missing');
             this.initializeEmptyCollisionMap();
             return;
         }
+
+        // Create canvas to read pixels
         const canvas = document.createElement('canvas');
         canvas.width = sourceImage.width;
         canvas.height = sourceImage.height;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(sourceImage, 0, 0);
+
+        const imageData = ctx.getImageData(0, 0, sourceImage.width, sourceImage.height);
+        const pixels = imageData.data;
+
         this.collisionMap = [];
         this.tileTypeMap = [];
+
+        // Debug info
+        let redCount = 0;
+        let blueCount = 0;
+        let grayCount = 0;
+        let yellowCount = 0;
+        let yardCount = 0;
+
         const scaleX = this.worldWidth / sourceImage.width;
         const scaleY = this.worldHeight / sourceImage.height;
+
         for (let tileY = 0; tileY < this.mapHeight; tileY++) {
             this.collisionMap[tileY] = [];
+            this.tileTypeMap[tileY] = [];
+
             for (let tileX = 0; tileX < this.mapWidth; tileX++) {
-                const worldX = tileX * this.tileSize + this.tileSize / 2;
-                const worldY = tileY * this.tileSize + this.tileSize / 2;
-                const mapX = Math.floor(worldX / scaleX);
-                const mapY = Math.floor(worldY / scaleY);
-                const clampedX = Phaser.Math.Clamp(mapX, 0, sourceImage.width - 1);
-                const clampedY = Phaser.Math.Clamp(mapY, 0, sourceImage.height - 1);
-                const imageData = ctx.getImageData(clampedX, clampedY, 1, 1);
-                const r = imageData.data[0];
-                const g = imageData.data[1];
-                const b = imageData.data[2];
-                const isRed = r > 150 && r > g * 1.5 && r > b * 1.5 && g < 150 && b < 150;
-                const isBlue = b > 150 && b > r * 1.5 && b > g * 1.5 && r < 150 && g < 150;
-                const isGray = Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30 &&
-                               r > 100 && r < 200 && g > 100 && g < 200 && b > 100 && b < 200;
+                // Map tile coordinate to texture coordinate
+                const worldX = tileX * this.tileSize;
+                const worldY = tileY * this.tileSize;
+
+                // Sample CENTER of the tile for better accuracy
+                const centerX = worldX + this.tileSize / 2;
+                const centerY = worldY + this.tileSize / 2;
+
+                const mapX = Math.floor(centerX / scaleX);
+                const mapY = Math.floor(centerY / scaleY);
+
+                const clampedX = Math.max(0, Math.min(mapX, sourceImage.width - 1));
+                const clampedY = Math.max(0, Math.min(mapY, sourceImage.height - 1));
+
+                const index = (clampedY * sourceImage.width + clampedX) * 4;
+                const r = pixels[index];
+                const g = pixels[index + 1];
+                const b = pixels[index + 2];
+
+                // Collision Logic (Refined)
+                // Red = Fence/Obstacle
+                const isRed = r > 150 && r > g * 1.5 && r > b * 1.5;
+                // Blue = Building/Kiosk
+                const isBlue = b > 150 && b > r * 1.5 && b > g * 1.5;
+                // Gray = Road
+                const isGray = Math.abs(r - g) < 40 && Math.abs(g - b) < 40 && r > 80 && r < 220;
+                // Yellow = Sidewalk
                 const isYellow = r > 200 && g > 200 && b < 100;
-                if (!this.tileTypeMap[tileY]) {
-                    this.tileTypeMap[tileY] = [];
-                }
+
                 if (isGray) {
                     this.tileTypeMap[tileY][tileX] = this.TILE_TYPES.ROAD;
+                    grayCount++;
+                    this.collisionMap[tileY][tileX] = false;
                 } else if (isYellow) {
                     this.tileTypeMap[tileY][tileX] = this.TILE_TYPES.SIDEWALK;
+                    yellowCount++;
+                    this.collisionMap[tileY][tileX] = false;
+                } else if (isRed || isBlue) {
+                    // Determine specific type if needed, but for collision it's just true
+                    if (isBlue) {
+                        this.tileTypeMap[tileY][tileX] = this.TILE_TYPES.BUILDING;
+                        blueCount++;
+                    } else {
+                        this.tileTypeMap[tileY][tileX] = this.TILE_TYPES.FENCE;
+                        redCount++;
+                    }
+                    this.collisionMap[tileY][tileX] = true;
                 } else {
                     this.tileTypeMap[tileY][tileX] = this.TILE_TYPES.YARD;
+                    yardCount++;
+                    this.collisionMap[tileY][tileX] = false;
                 }
-                this.collisionMap[tileY][tileX] = isRed || isBlue;
             }
         }
+
+        // Enforce boundary fence
         for (let x = 0; x < this.mapWidth; x++) {
             this.collisionMap[0][x] = true;
+            this.tileTypeMap[0][x] = this.TILE_TYPES.FENCE;
             this.collisionMap[this.mapHeight - 1][x] = true;
+            this.tileTypeMap[this.mapHeight - 1][x] = this.TILE_TYPES.FENCE;
         }
         for (let y = 0; y < this.mapHeight; y++) {
             this.collisionMap[y][0] = true;
+            this.tileTypeMap[y][0] = this.TILE_TYPES.FENCE;
             this.collisionMap[y][this.mapWidth - 1] = true;
+            this.tileTypeMap[y][this.mapWidth - 1] = this.TILE_TYPES.FENCE;
         }
+
+
         this.generateKiosks();
     }
     initializeEmptyCollisionMap() {

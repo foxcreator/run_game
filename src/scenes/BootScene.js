@@ -1,8 +1,15 @@
+import LoadingScreen from '../utils/LoadingScreen.js';
+
 class BootScene extends Phaser.Scene {
     constructor() {
         super({ key: 'BootScene' });
     }
+
     preload() {
+        // HTML лоадер (спінер) вже показується в index.html
+        // Він буде прихований у create(), коли завантаження завершиться.
+
+        // ТІЛЬКИ НЕОБХІДНЕ ДЛЯ МЕНЮ - швидке завантаження!
         this.load.image('menu_background', './src/assets/menu/background.png');
         this.load.image('gameover_background', './src/assets/menu/gameover_background.jpeg');
         this.load.image('kiosk', './src/assets/textures/kiosk.png');
@@ -85,6 +92,9 @@ class BootScene extends Phaser.Scene {
         this.load.image('sticker_right_4', './src/assets/textures/enemy-2/right_4.png');
         this.load.image('sticker_fall_1', './src/assets/textures/enemy-2/fall_1.png');
         this.load.image('sticker_fall_2', './src/assets/textures/enemy-2/fall_2.png');
+
+        // ТІЛЬКИ 1 музичний трек для меню (економимо ~20MB!)
+        // ✅ ВСЕІ МУЗИКА
         this.load.audio('back_1', './src/assets/music/back_1.mp3');
         this.load.audio('back_2', './src/assets/music/back_2.mp3');
         this.load.audio('back_3', './src/assets/music/back_3.mp3');
@@ -94,6 +104,8 @@ class BootScene extends Phaser.Scene {
         this.load.audio('back_7', './src/assets/music/back_7.mp3');
         this.load.audio('back_8', './src/assets/music/back_8.mp3');
         this.load.audio('gameover', './src/assets/music/gameover.mp3');
+
+        // ✅ ВСІ ЗВУКИ (як було раніше!)
         this.load.audio('running', './src/assets/sounds/running.mp3');
         this.load.audio('money', './src/assets/sounds/money.wav');
         this.load.audio('pickup', './src/assets/sounds/pickup.mp3');
@@ -103,6 +115,8 @@ class BootScene extends Phaser.Scene {
         this.load.audio('menu_choise', './src/assets/sounds/menu_choise.wav');
         this.load.audio('police_siren', './src/assets/sounds/stop_uhilant.mp3');
         this.load.audio('fall', './src/assets/sounds/fall.ogg');
+
+        // ✅ ENGINE SOUNDS
         this.load.audio('engine_01', './src/assets/sounds/engine-sounds/motorseamless01.wav');
         this.load.audio('engine_03', './src/assets/sounds/engine-sounds/motorseamless03.wav');
         this.load.audio('engine_05', './src/assets/sounds/engine-sounds/motorseamless05.wav');
@@ -110,14 +124,28 @@ class BootScene extends Phaser.Scene {
         this.load.audio('engine_09', './src/assets/sounds/engine-sounds/motorseamless09.wav');
         this.load.audio('engine_11', './src/assets/sounds/engine-sounds/motorseamless11.wav');
         this.load.audio('engine_13', './src/assets/sounds/engine-sounds/motorseamless13.wav');
+
+        // ⚠️ AMBIENT SOUNDS (247MB!) - повільне завантаження!
         this.load.audio('ambience_birds', './src/assets/sounds/ambience/birds.wav');
         this.load.audio('ambience_wind', './src/assets/sounds/ambience/wind.wav');
         this.load.audio('ambience_river', './src/assets/sounds/ambience/river.wav');
+
         this.load.on('loaderror', (file) => {
         });
     }
+
     create() {
+        // Приховуємо HTML лоадер, коли завантаження завершено
+        const loader = document.getElementById('loader');
+        if (loader) {
+            loader.style.display = 'none';
+        }
+
         this.scene.start('MenuScene');
+    }
+
+    update() {
+        // Логіка переходу тепер у create()
     }
 }
 export default BootScene;

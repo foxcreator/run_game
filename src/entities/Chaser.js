@@ -55,6 +55,11 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         this.audioManager = null;
         this.soundId = `enemy_${Date.now()}_${Math.random()}`;
         this.soundPlaybackRate = 0.95 + Math.random() * 0.1;
+        
+        // Hospital Mechanic - лічильник ударів машин
+        this.timesHitByCar = 0;
+        this.isHospitalized = false;
+        this.carHitCooldown = 0;  // Cooldown між ударами машин (щоб не рахувати один удар багато разів)
     }
     setNavigationSystem(navigationSystem) {
         this.navigationSystem = navigationSystem;
@@ -206,8 +211,67 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
             this.body.setVelocity(0, 0);
         }
     }
+    
+    /**
+     * Викликається коли ворога збила машина (Hospital Mechanic)
+     */
+    triggerFall() {
+        if (this.isHospitalized) return;
+        
+        // Перевіряємо cooldown щоб не рахувати один удар багато разів
+        if (this.carHitCooldown > 0) {
+            return;
+        }
+        
+        this.timesHitByCar++;
+        this.carHitCooldown = GAME_CONFIG.HOSPITAL.HIT_COOLDOWN;
+        
+        
+        // Перевіряємо чи досягли ліміту
+        if (this.timesHitByCar >= GAME_CONFIG.HOSPITAL.HITS_TO_HOSPITALIZE) {
+            this.hospitalize();
+        }
+    }
+    
+    /**
+     * Госпіталізує ворога (видаляє з гри)
+     */
+    hospitalize() {
+        if (this.isHospitalized) return;
+        
+        this.isHospitalized = true;
+        
+        
+        // Викликаємо подію для GameScene
+        this.scene.events.emit('enemy-hospitalized', this);
+        
+        // Зупиняємо звуки
+        if (this.audioManager && this.soundId) {
+            this.audioManager.stopSound(this.soundId);
+        }
+        
+        // Анімація зникнення (fade out)
+        this.scene.tweens.add({
+            targets: this,
+            alpha: 0,
+            duration: 500,
+            ease: 'Power2',
+            onComplete: () => {
+                this.destroy();
+            }
+        });
+    }
     update(delta, time = 0) {
         if (!this.active) return;
+        
+        // Оновлюємо cooldown ударів машин
+        if (this.carHitCooldown > 0) {
+            this.carHitCooldown -= delta;
+            if (this.carHitCooldown < 0) {
+                this.carHitCooldown = 0;
+            }
+        }
+        
         if (this.isFrozen) {
             this.frozenTimer -= delta;
             if (this.frozenTimer <= 0) {
