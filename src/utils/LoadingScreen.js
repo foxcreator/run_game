@@ -29,7 +29,7 @@ class LoadingScreen {
         this.elements.push(bg);
 
         // Заголовок
-        const titleText = this.scene.add.text(width / 2, height / 2 - 150, 'BUSIFICATION', {
+        const titleText = this.scene.add.text(width / 2, height / 2 - 150, 'ВТЕЧА ВІД ТЦК', {
             fontSize: '64px',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold',
