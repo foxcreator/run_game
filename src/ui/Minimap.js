@@ -137,6 +137,53 @@ class Minimap {
         const viewportY = this.y + camera.worldView.y * this.scaleY;
         this.viewportIndicator.lineStyle(2, 0xffff00, 1);
         this.viewportIndicator.strokeRect(viewportX, viewportY, viewportWidth, viewportHeight);
+        
+        // Оновлюємо індикатор Money Multiplier пікапа
+        this.updateMoneyMultiplierIndicator();
+    }
+    
+    /**
+     * Оновлює індикатор Money Multiplier пікапа на мінімапі
+     */
+    updateMoneyMultiplierIndicator() {
+        // Видаляємо старий індикатор якщо є
+        if (this.moneyMultiplierIndicator) {
+            this.moneyMultiplierIndicator.destroy();
+            this.moneyMultiplierIndicator = null;
+        }
+        
+        // Перевіряємо чи є активний пікап
+        if (this.scene.moneyMultiplierController) {
+            const pickup = this.scene.moneyMultiplierController.getCurrentPickup();
+            if (pickup && pickup.isActive) {
+                const minimapX = this.x + pickup.x * this.scaleX;
+                const minimapY = this.y + pickup.y * this.scaleY;
+                
+                // Створюємо індикатор (золота зірка що пульсує)
+                this.moneyMultiplierIndicator = this.scene.add.circle(
+                    minimapX,
+                    minimapY,
+                    8,
+                    0xffd700,
+                    1
+                );
+                this.moneyMultiplierIndicator.setScrollFactor(0);
+                this.moneyMultiplierIndicator.setDepth(105);
+                this.moneyMultiplierIndicator.setOrigin(0.5);
+                
+                // Анімація пульсації
+                this.scene.tweens.add({
+                    targets: this.moneyMultiplierIndicator,
+                    scaleX: 1.5,
+                    scaleY: 1.5,
+                    alpha: 0.5,
+                    duration: 500,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+            }
+        }
     }
     updateKioskIndicators() {
         for (const indicator of this.kioskIndicators) {

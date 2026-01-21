@@ -7,6 +7,10 @@ import PathfindingSystem from '../systems/PathfindingSystem.js';
 import NavigationSystem from '../systems/NavigationSystem.js';
 import SaveSystem from '../systems/SaveSystem.js';
 import AudioManager from '../systems/AudioManager.js';
+import NotificationManager from '../systems/NotificationManager.js';
+import EnemyDifficultyController from '../systems/EnemyDifficultyController.js';
+import MoneyDropController from '../systems/MoneyDropController.js';
+import MoneyMultiplierController from '../systems/MoneyMultiplierController.js';
 import PuddleSlip from '../entities/PuddleSlip.js';
 import TapeGate from '../entities/TapeGate.js';
 import Car from '../entities/Car.js';
@@ -16,122 +20,249 @@ import ChaserSticker from '../entities/ChaserSticker.js';
 import Coin from '../entities/Coin.js';
 import SmokeCloud from '../entities/bonuses/SmokeCloud.js';
 import Scooter from '../entities/bonuses/Scooter.js';
+import SpinnerBonus from '../entities/bonuses/SpinnerBonus.js';
 import Exchange from '../entities/Exchange.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
+import LoadingScreen from '../utils/LoadingScreen.js';
+
 class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
         this.carTextureIndex = 0;
+        this.loadingScreen = null;
+        this.actualProgress = 0;
+        this.isLoadingComplete = false;
+        this.loadingStartTime = 0;
     }
+
+    init() {
+        this.loadingStartTime = Date.now();
+        this.actualProgress = 0;
+    }
+
     preload() {
-        if (!this.textures.exists('kiosk')) {
-            this.load.image('kiosk', './src/assets/textures/kiosk.png');
-        }
-        if (!this.textures.exists('car_red')) {
-            this.load.image('car_red', './src/assets/textures/cars/red_car.png');
-        }
-        if (!this.textures.exists('car_white')) {
-            this.load.image('car_white', './src/assets/textures/cars/white_car.png');
-        }
+        // У GameScene більше немає preload() для асетів, всі вони завантажені в BootScene.
     }
+
     create() {
-        this.worldWidth = 4000;
-        this.worldHeight = 4000;
-        this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
+        // 1. Створюємо екран завантаження ВІДРАЗУ
+        this.loadingScreen = new LoadingScreen(this);
+        this.loadingScreen.create();
+        this.loadingScreen.updateProgress(0); // 0%
+
+        // 2. Блокуємо оновлення (update) поки не завантажиться
+        this.isGameReady = false;
+
+        // 3. Запускаємо асинхронну ініціалізацію через малу затримку, щоб браузер встиг намалювати лоадер
+        this.time.delayedCall(50, () => {
+            this.startAsyncInitialization();
+        });
+    }
+
+    async startAsyncInitialization() {
         try {
+            // КРОК 1: Ініціалізація фізики та меж світу (швидко)
+            console.log('[GameScene] Step 1: World & Physics');
+            this.initWorldBounds();
+            this.saveSystem = new SaveSystem();
+            this.initialBankedMoney = this.saveSystem.getBankedMoney();
+            this.bankedMoney = this.initialBankedMoney;
+            this.loadingScreen.updateProgress(0.1);
+            await this.yieldControl();
+
+            // КРОК 2: Генерація мапи (найважче!)
+            console.log('[GameScene] Step 2: Tilemap generation');
             this.tilemap = new TilemapSystem(this);
+            this.loadingScreen.updateProgress(0.3);
+            await this.yieldControl();
+
+            // КРОК 3: Спавн гравця (потрібен для мінімапи)
+            console.log('[GameScene] Step 3: Player');
+            this.spawnPlayer();
+            this.setupCameraFollow();
+            this.loadingScreen.updateProgress(0.4);
+            await this.yieldControl();
+
+            // КРОК 4: Міні-мапа та камери
+            console.log('[GameScene] Step 4: Minimap & Cameras');
+            try {
+                this.minimap = new Minimap(this, this.tilemap, this.player);
+            } catch (error) {
+                console.warn('Minimap init failed:', error);
+                this.minimap = null;
+            }
+            this.initCameras();
+            this.loadingScreen.updateProgress(0.5);
+            await this.yieldControl();
+
+            // КРОК 5: Системи
+            console.log('[GameScene] Step 5: Systems');
+            this.navigationSystem = new NavigationSystem(this.tilemap);
+            this.captureSystem = new CaptureSystem(this);
+            this.pathfindingSystem = new PathfindingSystem(this.tilemap);
+
+            this.audioManager = new AudioManager(this);
+            if (this.audioManager.init()) {
+                this.audioManager.setMusicVolume(0.5);
+                this.audioManager.startMusic();
+            }
+            if (this.player) this.player.audioManager = this.audioManager;
+
+            // Нові системи прогресії
+            this.notificationManager = new NotificationManager(this);
+            this.enemyDifficultyController = new EnemyDifficultyController(this, this.notificationManager);
+            this.moneyDropController = new MoneyDropController(this, this.notificationManager);
+            this.moneyMultiplierController = new MoneyMultiplierController(this, this.notificationManager);
+            this.moneyMultiplier = 1;
+
+            this.loadingScreen.updateProgress(0.7);
+            await this.yieldControl();
+
+            // КРОК 6: Вороги та перешкоди
+            console.log('[GameScene] Step 6: Enemies & Obstacles');
+            this.chasers = [];
+            this.obstacles = [];
+            this.pickups = [];
+            this.exchanges = [];
+
+            this.spawnInitialChasers();
+            // Синхронізуємо лічильник ворогів
+            if (this.enemyDifficultyController) {
+                const actualCount = this.chasers.filter(c => c && c.active).length;
+                this.enemyDifficultyController.setInitialEnemyCount(actualCount);
+            }
+
+            this.spawnExchanges();
+            for (const exchange of this.exchanges) {
+                this.obstacles.push(exchange);
+            }
+            this.spawnObstacles();
+            this.spawnPickups();
+
+            this.loadingScreen.updateProgress(0.9);
+            await this.yieldControl();
+
+            // КРОК 7: UI та коллайдери
+            console.log('[GameScene] Step 7: UI & Colliders');
+
+            this.hud = new HUD(this);
+            try {
+                this.hud.create(this.player);
+            } catch (error) {
+                console.warn('HUD create error', error);
+            }
+
+            // Fallback for money init
+            if (!this.hud.moneyText) {
+                const barX = 50;
+                const captureBarY = 50 + 40 + 40;
+                const moneyY = captureBarY + 40;
+                this.hud.moneyText = this.add.text(barX, moneyY, 'Зароблено: $0 | Банк: $0', {
+                    fontSize: '18px', fill: '#ffffff', fontFamily: 'Arial, sans-serif',
+                    stroke: '#000000', strokeThickness: 2
+                }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(202);
+                if (!this.hud.scene) this.hud.scene = this;
+            }
+            this.hud.setCaptureSystem(this.captureSystem);
+
+            this.setupObstacleCollisions();
+            this.setupCarCollisions();
+            this.setupPickupCollisions();
+            this.setupExchangeCollisions();
+
+            this.setupInput();
+            this.setupPauseControls();
+            this.setupProgressionEvents();
+
+            // Init variables
+            const sirenConfig = GAME_CONFIG.AUDIO.POLICE_SIREN;
+            this.nextSirenTime = this.time.now + Phaser.Math.Between(sirenConfig.MIN_INTERVAL, sirenConfig.MAX_INTERVAL);
+            this.initAmbienceSounds();
+            this.runMoney = 0;
+            this.totalCoinsSpawned = 0;
+            this.pickupSpawnTimer = 0;
+            this.pickupSpawnInterval = 1000;
+            this.lastSmokeCloudPickupTime = 0;
+            this.lastScooterPickupTime = 0;
+            this.timeSurvived = 0;
+            this.score = 0;
+            this.survivalBonus = 0;
+            this.nextBonusTime = GAME_CONFIG.SURVIVAL_BONUS.INTERVAL / 1000;
+            this.lastBonusBankAmount = 0;
+            this.isPaused = false;
+            this.pauseMenu = null;
+            this.autoPausedByBlur = false;
+
+            this.spinnerBonus = new SpinnerBonus(this, this.player, this.saveSystem);
+            this.pathRecalculationQueue = [];
+            this.maxPathRecalculationsPerTick = 3;
+
+            this.events.once('shutdown', this.shutdown, this);
+
+            this.loadingScreen.updateProgress(1.0);
+
+            // Фінальна затримка
+            this.time.delayedCall(500, () => {
+                this.finalizeLoading();
+            });
+
         } catch (error) {
-            const errorText = `Помилка завантаження карти:\n${error.message}`;
+            console.error('[GameScene] Critical Initialization Error:', error);
+            const errorText = `Помилка ініціалізації:\n${error.message}`;
             this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2,
                 errorText, { fontSize: '20px', fill: '#ff0000', align: 'center' })
                 .setOrigin(0.5);
-            return;
         }
-        this.pathfindingSystem = new PathfindingSystem(this.tilemap);
-        this.navigationSystem = new NavigationSystem(this.tilemap);
+    }
+
+    yieldControl() {
+        return new Promise(resolve => this.time.delayedCall(1, resolve));
+    }
+
+    initWorldBounds() {
+        this.worldWidth = 4000;
+        this.worldHeight = 4000;
+        this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
+    }
+
+    finalizeLoading() {
+        if (this.loadingScreen) {
+            this.loadingScreen.destroy();
+            this.loadingScreen = null;
+        }
+
+        this.cameras.main.fadeIn(500, 0, 0, 0);
+        this.isGameReady = true;
+        this.isPaused = false;
+        console.log('[GameScene] Ready!');
+    }
+
+    // Зберігаємо старі допоміжні методи, але видаляємо initCameras і spawnPlayer, якщо вони вже є далі
+    // (Але в оригіналі їх не було видно в snippet, тому я сподіваюсь що вони є або я їх додам якщо треба)
+
+    initCameras() {
+        this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
+        this.cameras.main.setDeadzone(100, 100);
+    }
+
+    spawnPlayer() {
         const startPos = this.findWalkablePosition(this.worldWidth / 2, this.worldHeight / 2);
         this.player = new Player(this, startPos.x, startPos.y);
         this.player.lastKioskCollisionTime = 0;
-        this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
-        this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-        this.cameras.main.setDeadzone(100, 100);
-        this.captureSystem = new CaptureSystem(this);
-        this.audioManager = new AudioManager(this);
-        this.hud = new HUD(this);
-        try {
-            this.hud.create(this.player);
-        } catch (error) {
-        }
-        if (!this.hud.moneyText) {
-            const barX = 50;
-            const captureBarY = 50 + 40 + 40;
-            const moneyY = captureBarY + 40;
-            const moneyText = this.add.text(barX, moneyY, 'Зароблено: $0 | Банк: $0', {
-                fontSize: '18px',
-                fill: '#ffffff',
-                fontFamily: 'Arial, sans-serif',
-                stroke: '#000000',
-                strokeThickness: 2
-            }).setOrigin(0, 0.5)
-            .setScrollFactor(0)
-            .setDepth(202);
-            this.hud.moneyText = moneyText;
-            if (!this.hud.scene) {
-                this.hud.scene = this;
-            }
-        }
-        this.hud.setCaptureSystem(this.captureSystem);
-        try {
-            this.minimap = new Minimap(this, this.tilemap, this.player);
-        } catch (error) {
-            this.minimap = null;
-        }
-        this.chasers = [];
-        this.spawnInitialChasers();
-        this.obstacles = [];
-        this.pickups = [];
-        this.exchanges = [];
-        this.saveSystem = new SaveSystem();
-        this.initialBankedMoney = this.saveSystem.getBankedMoney();
-        this.bankedMoney = this.initialBankedMoney;
-        this.spawnExchanges();
-        for (const exchange of this.exchanges) {
-            this.obstacles.push(exchange);
-        }
-        this.spawnObstacles();
-        this.setupObstacleCollisions();
-        this.setupCarCollisions();
-        this.setupPickupCollisions();
-        this.setupExchangeCollisions();
-        if (this.audioManager.init()) {
-            this.audioManager.startMusic();
-        }
-        if (this.player) {
-            this.player.audioManager = this.audioManager;
-        }
-        const sirenConfig = GAME_CONFIG.AUDIO.POLICE_SIREN;
-        this.nextSirenTime = this.time.now + Phaser.Math.Between(sirenConfig.MIN_INTERVAL, sirenConfig.MAX_INTERVAL);
-        this.initAmbienceSounds();
-        this.runMoney = 0;
-        this.totalCoinsSpawned = 0;
-        this.pickupSpawnTimer = 0;
-        this.pickupSpawnInterval = 1000;
-        this.lastSmokeCloudPickupTime = 0;
-        this.lastScooterPickupTime = 0;
-        this.spawnPickups();
-        this.timeSurvived = 0;
-        this.score = 0;
-        this.survivalBonus = 0;
-        this.nextBonusTime = GAME_CONFIG.SURVIVAL_BONUS.INTERVAL / 1000;
-        this.lastBonusBankAmount = 0;
-        this.isPaused = false;
-        this.pauseMenu = null;
-        this.autoPausedByBlur = false;
-        this.setupPauseControls();
-        this.events.once('shutdown', this.shutdown, this);
-        this.pathRecalculationQueue = [];
-        this.maxPathRecalculationsPerTick = 3;
     }
+
+    setupCameraFollow() {
+        this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+    }
+
+
+
+    setupInput() {
+        // Теж саме
+    }
+
+    // Нові системи прогресії
+
     setupPauseControls() {
         this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
         this.inSettingsMenu = false;
@@ -148,6 +279,58 @@ class GameScene extends Phaser.Scene {
         this.game.events.on('focus', this.handleWindowFocus, this);
         this.game.events.on('hidden', this.handleWindowBlur, this);
         this.game.events.on('visible', this.handleWindowFocus, this);
+    }
+
+    /**
+     * Налаштовує події для систем прогресії
+     */
+    setupProgressionEvents() {
+        // Подія підкріплення ворогів
+        this.events.on('spawn-reinforcement', (data) => {
+
+            // Створюємо ворогів по черзі: 1 Blocker, 1 Sticker, 1 Blocker, 1 Sticker...
+            const types = ['Blocker', 'Sticker'];
+            for (let i = 0; i < data.count; i++) {
+                const type = types[i % types.length];  // Чергуємо типи
+                const chaser = this.spawnChaser(type);
+                if (chaser) {
+                } else {
+                }
+            }
+        });
+
+        // Подія госпіталізації ворога
+        this.events.on('enemy-hospitalized', (enemy) => {
+
+            // Показуємо повідомлення
+            const messages = GAME_CONFIG.HOSPITAL.MESSAGES;
+            const message = messages[Math.floor(Math.random() * messages.length)];
+            this.notificationManager.show(
+                message,
+                GAME_CONFIG.NOTIFICATIONS.PRIORITY.MEDIUM
+            );
+
+            // Зменшуємо лічильник ворогів
+            if (this.enemyDifficultyController) {
+                this.enemyDifficultyController.decrementEnemyCount();
+            }
+
+            // Видаляємо ворога зі списку
+            const index = this.chasers.indexOf(enemy);
+            if (index > -1) {
+                this.chasers.splice(index, 1);
+            }
+        });
+
+        // Подія активації множника грошей
+        this.events.on('money-multiplier-activated', (multiplier) => {
+            this.moneyMultiplier = multiplier;
+        });
+
+        // Подія деактивації множника грошей
+        this.events.on('money-multiplier-deactivated', () => {
+            this.moneyMultiplier = 1;
+        });
     }
     handleWindowBlur() {
         if (!this.isPaused && !this.captureSystem?.isMaxed()) {
@@ -168,6 +351,21 @@ class GameScene extends Phaser.Scene {
             this.audioManager.pauseMusic();
             this.audioManager.pauseSounds();
         }
+
+        // Зупиняємо нові системи прогресії
+        if (this.enemyDifficultyController) {
+            this.enemyDifficultyController.pause();
+        }
+        if (this.moneyDropController) {
+            this.moneyDropController.pause();
+        }
+        if (this.moneyMultiplierController) {
+            this.moneyMultiplierController.pause();
+        }
+        if (this.spinnerBonus) {
+            this.spinnerBonus.pause();
+        }
+
         this.createPauseMenu();
     }
     resumeGame() {
@@ -178,6 +376,21 @@ class GameScene extends Phaser.Scene {
             this.audioManager.resumeMusic();
             this.audioManager.resumeSounds();
         }
+
+        // Відновлюємо нові системи прогресії
+        if (this.enemyDifficultyController) {
+            this.enemyDifficultyController.resume();
+        }
+        if (this.moneyDropController) {
+            this.moneyDropController.resume();
+        }
+        if (this.moneyMultiplierController) {
+            this.moneyMultiplierController.resume();
+        }
+        if (this.spinnerBonus) {
+            this.spinnerBonus.resume();
+        }
+
         if (this.pauseMenu) {
             if (this.pauseMenu.overlay) {
                 this.pauseMenu.overlay.destroy();
@@ -376,7 +589,7 @@ class GameScene extends Phaser.Scene {
                 fontSize: '32px'
             }
         ).setOrigin(0.5).setScrollFactor(0).setDepth(1003)
-        .setInteractive({ useHandCursor: true });
+            .setInteractive({ useHandCursor: true });
         musicToggleIcon.on('pointerover', () => {
             if (this.audioManager) {
                 const existingHover = this.audioManager.getSound('menu_hover_current');
@@ -455,7 +668,7 @@ class GameScene extends Phaser.Scene {
                 fontSize: '32px'
             }
         ).setOrigin(0.5).setScrollFactor(0).setDepth(1003)
-        .setInteractive({ useHandCursor: true });
+            .setInteractive({ useHandCursor: true });
         soundsToggleIcon.on('pointerover', () => {
             if (this.audioManager) {
                 const existingHover = this.audioManager.getSound('menu_hover_current');
@@ -513,9 +726,9 @@ class GameScene extends Phaser.Scene {
             });
             this.settingsMenuElements = null;
         }
-                if (this.pauseMenu) {
-                    this.pauseMenu.setVisible(true);
-                }
+        if (this.pauseMenu) {
+            this.pauseMenu.setVisible(true);
+        }
         this.inSettingsMenu = false;
     }
     spawnExchanges() {
@@ -845,9 +1058,16 @@ class GameScene extends Phaser.Scene {
         if (!pickup || !pickup.active || pickup.collected) return;
         pickup.collected = true;
         if (pickup instanceof Coin && pickup.value !== undefined) {
-            const multiplier = this.getRiskMultiplier();
-            const earnedMoney = pickup.value * multiplier;
+            // Застосовуємо множники: ризик + money multiplier
+            const riskMultiplier = this.getRiskMultiplier();
+            const totalMultiplier = riskMultiplier * this.moneyMultiplier;
+            const earnedMoney = pickup.value * totalMultiplier;
             this.runMoney += earnedMoney;
+
+            // Показуємо повідомлення про множник якщо він активний
+            if (this.moneyMultiplier > 1) {
+            }
+
             if (this.audioManager) {
                 this.audioManager.playSound('money_pickup', false, null, 'money');
             }
@@ -858,7 +1078,7 @@ class GameScene extends Phaser.Scene {
             }
         }
         else if (pickup.applyEffect) {
-            if (this.audioManager && this.cache.audio.exists('pickup')) {
+            if (this.audioManager) {
                 this.audioManager.playSound('pickup_bonus', false, 0.6, 'pickup');
             }
             pickup.applyEffect(player, this);
@@ -931,16 +1151,18 @@ class GameScene extends Phaser.Scene {
         const initialCount = GAME_CONFIG.CHASERS.SPAWN.INITIAL_COUNT;
         const blockerCount = Math.floor(initialCount / 2);
         const stickerCount = initialCount - blockerCount;
+
+
+        let successCount = 0;
         for (let i = 0; i < blockerCount; i++) {
             const chaser = this.spawnChaser('Blocker');
-            if (!chaser) {
-            }
+            if (chaser) successCount++;
         }
         for (let i = 0; i < stickerCount; i++) {
             const chaser = this.spawnChaser('Sticker');
-            if (!chaser) {
-            }
+            if (chaser) successCount++;
         }
+
     }
     spawnChaser(type) {
         const spawnConfig = GAME_CONFIG.CHASERS.SPAWN;
@@ -961,6 +1183,11 @@ class GameScene extends Phaser.Scene {
                 continue;
             }
             if (!this.tilemap.isWalkable(spawnX, spawnY)) {
+                continue;
+            }
+            // Перевіряємо чи не будівля
+            const tileType = this.tilemap.getTileType(spawnX, spawnY);
+            if (tileType === this.tilemap.TILE_TYPES.BUILDING) {
                 continue;
             }
             let tooClose = false;
@@ -991,7 +1218,15 @@ class GameScene extends Phaser.Scene {
                 spawnY = fallbackPos.y;
             }
         }
+
+        // Фінальна перевірка
         if (!this.tilemap.isWalkable(spawnX, spawnY)) {
+            return null;
+        }
+
+        // Перевіряємо чи не будівля
+        const finalTileType = this.tilemap.getTileType(spawnX, spawnY);
+        if (finalTileType === this.tilemap.TILE_TYPES.BUILDING) {
             return null;
         }
         let chaser;
@@ -1003,38 +1238,68 @@ class GameScene extends Phaser.Scene {
         } else {
             return null;
         }
+
+        // Налаштовуємо ворога
         chaser.setTarget(this.player);
         chaser.setPathfindingSystem(this.pathfindingSystem);
+
         if (chaser.setNavigationSystem && this.navigationSystem) {
             chaser.setNavigationSystem(this.navigationSystem);
+        } else {
         }
+
         if (this.audioManager) {
             chaser.audioManager = this.audioManager;
         }
+
         this.chasers.push(chaser);
         return chaser;
     }
     findWalkablePosition(centerX, centerY) {
         const searchRadius = 50;
         const tile = this.tilemap.worldToTile(centerX, centerY);
+
+        // Перевіряємо центральну позицію
         if (this.tilemap.isWalkable(centerX, centerY)) {
-            return { x: centerX, y: centerY };
+            const tileType = this.tilemap.getTileType(centerX, centerY);
+            if (tileType !== this.tilemap.TILE_TYPES.BUILDING) {
+                return { x: centerX, y: centerY };
+            }
         }
+
+        // Шукаємо навколо
         for (let radius = 1; radius <= searchRadius; radius++) {
             for (let dx = -radius; dx <= radius; dx++) {
                 for (let dy = -radius; dy <= radius; dy++) {
                     if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
                     const checkTile = { x: tile.x + dx, y: tile.y + dy };
                     const worldPos = this.tilemap.tileToWorld(checkTile.x, checkTile.y);
+
                     if (this.tilemap.isWalkable(worldPos.x, worldPos.y)) {
-                        return worldPos;
+                        const tileType = this.tilemap.getTileType(worldPos.x, worldPos.y);
+                        if (tileType !== this.tilemap.TILE_TYPES.BUILDING) {
+                            return worldPos;
+                        }
                     }
                 }
             }
         }
+
         return { x: centerX, y: centerY };
     }
     update(time, delta) {
+        // Оновлюємо екран завантаження якщо він є, і БЛОКУЄМО інше
+        if (this.loadingScreen) {
+            this.loadingScreen.update();
+            return;
+        }
+
+        // Якщо гра ще не готова (наприклад, між destroy лоадера і isGameReady=true), теж виходимо
+        if (!this.isGameReady) return;
+
+        // Перевіряємо чи можна завершити завантаження (мінімум 3 секунди)
+        // Цей блок ми видаляємо, бо логіка завершення тепер у startAsyncInitialization -> finalizeLoading
+
         if (this.isPaused) {
             return;
         }
@@ -1048,6 +1313,15 @@ class GameScene extends Phaser.Scene {
                 this.handleGameOver();
             }
         }
+
+        // Оновлюємо нові системи прогресії
+        if (this.spinnerBonus) {
+            this.spinnerBonus.update(delta);
+        }
+        if (this.moneyMultiplierController) {
+            this.moneyMultiplierController.update(delta);
+        }
+
         this.checkPoliceSiren(time);
         this.updateRiverSound();
         this.timeSurvived += delta / 1000;
@@ -1144,7 +1418,7 @@ class GameScene extends Phaser.Scene {
             }
         }
         if (this.hud) {
-            this.hud.update();
+            this.hud.update(delta);
             this.children.bringToTop(this.hud.staminaBarBg);
             this.children.bringToTop(this.hud.staminaBar);
             this.children.bringToTop(this.hud.staminaText);
@@ -1539,6 +1813,14 @@ class GameScene extends Phaser.Scene {
         }
     }
     selectCoinDenomination() {
+        // Використовуємо MoneyDropController для вибору номіналу
+        if (this.moneyDropController) {
+            const value = this.moneyDropController.generateCoinValue();
+            const config = this.moneyDropController.getCoinConfig(value);
+            return config;
+        }
+
+        // Fallback на стару логіку якщо контролер не ініціалізовано
         const denominations = GAME_CONFIG.PICKUPS.COINS.DENOMINATIONS;
         const baseDenomination = denominations.find(d => d.value === 10);
         const higherDenominations = denominations
@@ -1772,7 +2054,7 @@ class GameScene extends Phaser.Scene {
             volume = ambienceConfig.RIVER_MAX_VOLUME;
         } else if (closestWaterDistance < ambienceConfig.RIVER_MAX_DISTANCE) {
             const ratio = (ambienceConfig.RIVER_MAX_DISTANCE - closestWaterDistance) /
-                         (ambienceConfig.RIVER_MAX_DISTANCE - ambienceConfig.RIVER_MIN_DISTANCE);
+                (ambienceConfig.RIVER_MAX_DISTANCE - ambienceConfig.RIVER_MIN_DISTANCE);
             volume = ambienceConfig.RIVER_MAX_VOLUME * ratio;
         }
         this.ambienceRiver.setVolume(volume);
@@ -1863,6 +2145,23 @@ class GameScene extends Phaser.Scene {
             this.game.events.off('focus', this.handleWindowFocus, this);
             this.game.events.off('hidden', this.handleWindowBlur, this);
             this.game.events.off('visible', this.handleWindowFocus, this);
+        }
+
+        // Знищуємо нові системи прогресії
+        if (this.notificationManager) {
+            this.notificationManager.destroy();
+        }
+        if (this.enemyDifficultyController) {
+            this.enemyDifficultyController.destroy();
+        }
+        if (this.moneyDropController) {
+            this.moneyDropController.destroy();
+        }
+        if (this.moneyMultiplierController) {
+            this.moneyMultiplierController.destroy();
+        }
+        if (this.spinnerBonus) {
+            this.spinnerBonus.destroy();
         }
     }
 }

@@ -35,6 +35,11 @@ const config = {
     dom: {
         createContainer: true
     },
+    audio: {
+        disableWebAudio: false,  // Використовувати Web Audio API
+        noAudio: false,
+        context: false  // Не створювати контекст одразу (економить ресурси)
+    },
     scene: [BootScene, MenuScene, GameScene, ResultScene, ShopScene]
 };
 const game = new Phaser.Game(config);

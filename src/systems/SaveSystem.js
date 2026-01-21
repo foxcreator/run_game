@@ -47,6 +47,19 @@ class SaveSystem {
             this.save(data);
         }
     }
+    getSpinnerCount() {
+        const data = this.load();
+        return data?.spinnerCount || 0;
+    }
+    setSpinnerCount(count) {
+        const data = this.load() || {};
+        data.spinnerCount = Math.max(0, count);
+        this.save(data);
+    }
+    addSpinnerCount(amount) {
+        const current = this.getSpinnerCount();
+        this.setSpinnerCount(current + amount);
+    }
     clear() {
         try {
             localStorage.removeItem(this.STORAGE_KEY);

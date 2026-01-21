@@ -65,6 +65,7 @@ class MenuScene extends Phaser.Scene {
             'ГРАТИ',
             () => {
                 try {
+                    // Прямий старт ігрової сцени (вона сама покаже свій екран завантаження)
                     this.scene.start('GameScene');
                 } catch (error) {
                     alert('Помилка запуску гри: ' + error.message);
@@ -111,9 +112,9 @@ class MenuScene extends Phaser.Scene {
         if (GAME_CONFIG.UI.SHOW_CLICK_TO_START) {
             this.showClickToStartOverlay();
         }
-        const shouldShowWelcome = GAME_CONFIG.UI.SHOW_WELCOME_POPUP && 
+        const shouldShowWelcome = GAME_CONFIG.UI.SHOW_WELCOME_POPUP &&
             (GAME_CONFIG.UI.ALWAYS_SHOW_WELCOME_POPUP || !localStorage.getItem('welcomeShown'));
-        
+
         if (shouldShowWelcome) {
             this.time.delayedCall(800, () => {
                 this.showWelcomePopup();
@@ -272,8 +273,8 @@ class MenuScene extends Phaser.Scene {
             0x808080,
             0.95
         )
-        .setDepth(101)
-        .setStrokeStyle(3, 0x606060);
+            .setDepth(101)
+            .setStrokeStyle(3, 0x606060);
         const title = this.add.text(settingsBoxX, settingsBoxY - 180, 'НАЛАШТУВАННЯ', {
             fontSize: '48px',
             fill: '#FFFFFF',
@@ -346,7 +347,7 @@ class MenuScene extends Phaser.Scene {
                 fontSize: '32px'
             }
         ).setOrigin(0.5).setDepth(102)
-        .setInteractive({ useHandCursor: true });
+            .setInteractive({ useHandCursor: true });
         musicToggleIcon.on('pointerover', () => {
             if (this.audioManager) {
                 const existingHover = this.audioManager.getSound('menu_hover_current');
@@ -425,7 +426,7 @@ class MenuScene extends Phaser.Scene {
                 fontSize: '32px'
             }
         ).setOrigin(0.5).setDepth(102)
-        .setInteractive({ useHandCursor: true });
+            .setInteractive({ useHandCursor: true });
         soundsToggleIcon.on('pointerover', () => {
             if (this.audioManager) {
                 const existingHover = this.audioManager.getSound('menu_hover_current');
@@ -521,9 +522,9 @@ class MenuScene extends Phaser.Scene {
             0x808080,
             0.95
         )
-        .setDepth(101)
-        .setStrokeStyle(3, 0x606060);
-        const title = this.add.text(aboutBoxX, aboutBoxY - aboutHeight/2 + 30, '🏃 ПРО ГРУ', {
+            .setDepth(101)
+            .setStrokeStyle(3, 0x606060);
+        const title = this.add.text(aboutBoxX, aboutBoxY - aboutHeight / 2 + 30, '🏃 ПРО ГРУ', {
             fontSize: '28px',
             fill: '#0057B7',
             fontFamily: 'Arial, sans-serif',
@@ -620,7 +621,7 @@ class MenuScene extends Phaser.Scene {
         contentElement.setDepth(102);
         const closeButton = this.createMenuButton(
             aboutBoxX,
-            aboutBoxY + aboutHeight/2 - 35,
+            aboutBoxY + aboutHeight / 2 - 35,
             200,
             50,
             'ЗАКРИТИ',
@@ -681,7 +682,7 @@ class MenuScene extends Phaser.Scene {
             fontStyle: 'bold',
             resolution: 2
         }).setOrigin(0.5).setDepth(103);
-        const messageText = this.add.text(popupX, popupY - 15, 
+        const messageText = this.add.text(popupX, popupY - 15,
             '🏃 Ласкаво просимо до бета-версії гри!\n\n⚠️ Це БЕТА! Тут можуть бути баги, глюки, та всілякі дивні штуки. Якщо щось працює не так - не панікуй, це нормально! 😅\n\n💡 Знайшли баг? Є крута ідея? Створюй таску на GitHub!\n\nТам можна поскаржитись, запропонувати фічу, або просто сказати "шо це було?" 🤔\n\n🙏 Дякуємо що тестуєте і допомагаєте зробити гру кращою!', {
             fontSize: '18px',
             fill: '#ffffff',

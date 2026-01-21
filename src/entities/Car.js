@@ -496,6 +496,11 @@ class Car extends Phaser.GameObjects.Image {
                 });
             }
             else if (entity.type && (entity.type === 'Blocker' || entity.type === 'Sticker') && this.scene.player) {
+                // Викликаємо triggerFall для ворога (Hospital Mechanic)
+                if (entity.triggerFall) {
+                    entity.triggerFall();
+                }
+                
                 const distanceToPlayer = Phaser.Math.Distance.Between(
                     entity.x, entity.y,
                     this.scene.player.x, this.scene.player.y

@@ -16,6 +16,11 @@ class HUD {
         this.multiplierText = null;
         this.multiplierBg = null;
         this.multiplierLabel = null;
+        
+        // Таймер виживання
+        this.survivalTimerBg = null;
+        this.survivalTimerText = null;
+        this.survivalElapsedTime = 0;  // Час виживання в мілісекундах (НЕ рахується на паузі)
     }
     create(player) {
         try {
@@ -98,11 +103,66 @@ class HUD {
             }).setOrigin(0, 0.5)
             .setScrollFactor(0)
             .setDepth(202);
+            
+            // Текст множника грошей (Money Multiplier)
+            const moneyMultiplierY = moneyY + 35;
+            this.moneyMultiplierText = this.scene.add.text(barX, moneyMultiplierY, '', {
+                fontSize: '24px',
+                fontStyle: 'bold',
+                fill: '#ffd700',
+                fontFamily: 'Arial, sans-serif',
+                stroke: '#000000',
+                strokeThickness: 3
+            }).setOrigin(0, 0.5)
+            .setScrollFactor(0)
+            .setDepth(202)
+            .setVisible(false);
+            
+            // Текст cooldown вертушки (Spinner Bonus)
+            const spinnerY = moneyMultiplierY + 35;
+            this.spinnerCooldownText = this.scene.add.text(barX, spinnerY, '', {
+                fontSize: '16px',
+                fill: '#ffffff',
+                fontFamily: 'Arial, sans-serif',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0, 0.5)
+            .setScrollFactor(0)
+            .setDepth(202)
+            .setVisible(false);
             this.bonusIconsContainer = this.scene.add.container(barX, moneyY + 30)
                 .setScrollFactor(0)
                 .setDepth(202);
-            const multiplierX = width - 20;
-            const multiplierY = 30;
+            
+            // Таймер виживання (зверху справа)
+            const rightX = width - 20;
+            const survivalTimerY = 15;
+            this.survivalTimerBg = this.scene.add.rectangle(
+                rightX, survivalTimerY, 180, 60, 0x000000, 0.7
+            )
+            .setOrigin(1, 0)
+            .setScrollFactor(0)
+            .setDepth(200);
+            
+            this.survivalTimerText = this.scene.add.text(
+                rightX - 90, survivalTimerY + 30, '⏱️ 00:00', {
+                    fontSize: '32px',
+                    fill: '#00FF00',
+                    fontFamily: 'Arial, sans-serif',
+                    fontStyle: 'bold',
+                    stroke: '#000000',
+                    strokeThickness: 4
+                }
+            )
+            .setOrigin(0.5, 0.5)
+            .setScrollFactor(0)
+            .setDepth(201);
+            
+            this.survivalElapsedTime = 0;  // Скидаємо лічильник
+            
+            // Множник ризику (нижче таймера)
+            const multiplierX = rightX;
+            const multiplierY = 85;
             this.multiplierBg = this.scene.add.rectangle(
                 multiplierX, multiplierY, 180, 70, 0x000000, 0.7
             )
@@ -141,10 +201,41 @@ class HUD {
     setCaptureSystem(captureSystem) {
         this.captureSystem = captureSystem;
     }
-    update() {
+    
+    updateSurvivalTimer(delta) {
+        if (!this.survivalTimerText || !this.scene) return;
+        
+        // Додаємо дельту тільки якщо гра НЕ на паузі
+        if (!this.scene.isPaused) {
+            this.survivalElapsedTime += delta;
+        }
+        
+        const totalSeconds = Math.floor(this.survivalElapsedTime / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        
+        const timeString = `⏱️ ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        this.survivalTimerText.setText(timeString);
+        
+        // Зміна кольору залежно від часу
+        if (totalSeconds < 60) {
+            this.survivalTimerText.setFill('#00FF00'); // Зелений (0-1 хв)
+        } else if (totalSeconds < 300) {
+            this.survivalTimerText.setFill('#FFFF00'); // Жовтий (1-5 хв)
+        } else if (totalSeconds < 600) {
+            this.survivalTimerText.setFill('#FFA500'); // Помаранчевий (5-10 хв)
+        } else {
+            this.survivalTimerText.setFill('#FF0000'); // Червоний (10+ хв)
+        }
+    }
+    
+    update(delta = 16) {
         if (!this.player) {
             return;
         }
+        
+        // Оновлюємо таймер виживання (передаємо delta)
+        this.updateSurvivalTimer(delta);
         if (this.moneyText) {
             if (!this.scene) {
                 return;
@@ -158,6 +249,40 @@ class HUD {
                 this.moneyTextWarningShown = true;
             }
         }
+        // Оновлюємо множник грошей (Money Multiplier)
+        if (this.moneyMultiplierText && this.scene.moneyMultiplier) {
+            if (this.scene.moneyMultiplier > 1) {
+                this.moneyMultiplierText.setVisible(true);
+                this.moneyMultiplierText.setText(`💰 x${this.scene.moneyMultiplier} МНОЖНИК АКТИВНИЙ!`);
+                
+                // Пульсація тексту
+                const scale = 1 + Math.sin(Date.now() / 200) * 0.1;
+                this.moneyMultiplierText.setScale(scale);
+            } else {
+                this.moneyMultiplierText.setVisible(false);
+            }
+        }
+        
+        // Оновлюємо cooldown вертушки (Spinner Bonus)
+        if (this.spinnerCooldownText && this.scene.spinnerBonus) {
+            const usesLeft = this.scene.spinnerBonus.getUsesLeft();
+            
+            if (usesLeft <= 0) {
+                this.spinnerCooldownText.setVisible(true);
+                this.spinnerCooldownText.setText(`🌀 Вертушка: НЕМАЄ (купи в магазині)`);
+                this.spinnerCooldownText.setFill('#ff0000');
+            } else if (this.scene.spinnerBonus.isOnCooldownNow()) {
+                const seconds = this.scene.spinnerBonus.getCooldownRemaining();
+                this.spinnerCooldownText.setVisible(true);
+                this.spinnerCooldownText.setText(`🌀 Вертушка: ${seconds}с (x${usesLeft})`);
+                this.spinnerCooldownText.setFill('#ffffff');
+            } else {
+                this.spinnerCooldownText.setVisible(true);
+                this.spinnerCooldownText.setText(`🌀 Вертушка: ГОТОВА (E) x${usesLeft}`);
+                this.spinnerCooldownText.setFill('#00ff00');
+            }
+        }
+        
         if (this.multiplierText && this.scene.getRiskMultiplier) {
             const multiplier = this.scene.getRiskMultiplier();
             this.multiplierText.setText(`x${multiplier}`);
@@ -243,6 +368,8 @@ class HUD {
         if (this.multiplierText) this.multiplierText.destroy();
         if (this.multiplierBg) this.multiplierBg.destroy();
         if (this.multiplierLabel) this.multiplierLabel.destroy();
+        if (this.survivalTimerBg) this.survivalTimerBg.destroy();
+        if (this.survivalTimerText) this.survivalTimerText.destroy();
     }
 }
 export default HUD;
