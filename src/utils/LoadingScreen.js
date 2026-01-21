@@ -19,10 +19,8 @@ class LoadingScreen {
      * Створює екран завантаження
      */
     create() {
-        console.log('[LoadingScreen] Створення екрану завантаження');
         const width = this.scene.cameras.main.width;
         const height = this.scene.cameras.main.height;
-        console.log(`[LoadingScreen] Розміри: ${width}x${height}`);
 
         // Фон
         const bg = this.scene.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e);
@@ -119,7 +117,6 @@ class LoadingScreen {
 
         // Показуємо першу пораду
         this.showRandomTip();
-        console.log('[LoadingScreen] Перша порада показана');
 
         // Таймер для зміни порад кожні 5 секунд
         this.tipTimer = this.scene.time.addEvent({
@@ -128,7 +125,6 @@ class LoadingScreen {
             loop: true
         });
 
-        console.log('[LoadingScreen] Екран завантаження створено, елементів:', this.elements.length);
     }
 
     /**
@@ -155,7 +151,6 @@ class LoadingScreen {
 
         if (this.tipText) {
             this.tipText.setText(newTip);
-            console.log('[LoadingScreen] Порада встановлена:', newTip.substring(0, 50) + '...');
         } else {
             console.error('[LoadingScreen] tipText не існує!');
         }
@@ -195,20 +190,17 @@ class LoadingScreen {
             const artificialProgress = elapsed / this.minLoadingTime;
             const displayProgress = Math.min(actualProgress, artificialProgress);
             this.updateProgress(displayProgress);
-            console.log(`[LoadingScreen] Чекаємо... Час: ${elapsed}ms / ${this.minLoadingTime}ms, Прогрес: ${Math.round(displayProgress * 100)}%`);
             return false;
         }
 
         // Якщо пройшов мінімальний час і все завантажено
         if (actualProgress >= 1) {
             this.updateProgress(1);
-            console.log('[LoadingScreen] Завантаження завершено!');
             return true;
         }
 
         // Інакше показуємо реальний прогрес
         this.updateProgress(actualProgress);
-        console.log(`[LoadingScreen] Завантаження... Прогрес: ${Math.round(actualProgress * 100)}%`);
         return false;
     }
 

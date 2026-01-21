@@ -167,7 +167,6 @@ class TilemapSystem {
             this.tileTypeMap[y][this.mapWidth - 1] = this.TILE_TYPES.FENCE;
         }
 
-        console.log(`[TilemapSystem] Collision Map Loaded. Stats: Road=${grayCount}, Sidewalk=${yellowCount}, Building=${blueCount}, Fence=${redCount}, Yard=${yardCount}`);
 
         this.generateKiosks();
     }

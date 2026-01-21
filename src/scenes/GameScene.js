@@ -62,7 +62,6 @@ class GameScene extends Phaser.Scene {
     async startAsyncInitialization() {
         try {
             // КРОК 1: Ініціалізація фізики та меж світу (швидко)
-            console.log('[GameScene] Step 1: World & Physics');
             this.initWorldBounds();
             this.saveSystem = new SaveSystem();
             this.initialBankedMoney = this.saveSystem.getBankedMoney();
@@ -71,20 +70,17 @@ class GameScene extends Phaser.Scene {
             await this.yieldControl();
 
             // КРОК 2: Генерація мапи (найважче!)
-            console.log('[GameScene] Step 2: Tilemap generation');
             this.tilemap = new TilemapSystem(this);
             this.loadingScreen.updateProgress(0.3);
             await this.yieldControl();
 
             // КРОК 3: Спавн гравця (потрібен для мінімапи)
-            console.log('[GameScene] Step 3: Player');
             this.spawnPlayer();
             this.setupCameraFollow();
             this.loadingScreen.updateProgress(0.4);
             await this.yieldControl();
 
             // КРОК 4: Міні-мапа та камери
-            console.log('[GameScene] Step 4: Minimap & Cameras');
             try {
                 this.minimap = new Minimap(this, this.tilemap, this.player);
             } catch (error) {
@@ -96,7 +92,6 @@ class GameScene extends Phaser.Scene {
             await this.yieldControl();
 
             // КРОК 5: Системи
-            console.log('[GameScene] Step 5: Systems');
             this.navigationSystem = new NavigationSystem(this.tilemap);
             this.captureSystem = new CaptureSystem(this);
             this.pathfindingSystem = new PathfindingSystem(this.tilemap);
@@ -119,7 +114,6 @@ class GameScene extends Phaser.Scene {
             await this.yieldControl();
 
             // КРОК 6: Вороги та перешкоди
-            console.log('[GameScene] Step 6: Enemies & Obstacles');
             this.chasers = [];
             this.obstacles = [];
             this.pickups = [];
@@ -143,7 +137,6 @@ class GameScene extends Phaser.Scene {
             await this.yieldControl();
 
             // КРОК 7: UI та коллайдери
-            console.log('[GameScene] Step 7: UI & Colliders');
 
             this.hud = new HUD(this);
             try {
@@ -244,7 +237,6 @@ class GameScene extends Phaser.Scene {
         // Без fadeIn - одразу готові до гри
         this.isGameReady = true;
         this.isPaused = false;
-        console.log('[GameScene] Ready!');
     }
 
     // Зберігаємо старі допоміжні методи, але видаляємо initCameras і spawnPlayer, якщо вони вже є далі
