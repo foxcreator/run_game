@@ -201,8 +201,20 @@ class GameScene extends Phaser.Scene {
 
             this.loadingScreen.updateProgress(1.0);
 
-            // Відразу завершуємо завантаження без затримки
-            this.finalizeLoading();
+            // Мінімальний час показу екрану завантаження - 4 секунди
+            // Прогрес бар залишається видимим на 100% поки не мине час
+            const MIN_LOADING_TIME = 4000;
+            const elapsedTime = Date.now() - this.loadingStartTime;
+            const remainingTime = Math.max(0, MIN_LOADING_TIME - elapsedTime);
+
+            // Чекаємо залишок часу (прогрес бар на 100% видимий), потім гра ОДРАЗУ стартує
+            if (remainingTime > 0) {
+                this.time.delayedCall(remainingTime, () => {
+                    this.finalizeLoading();
+                });
+            } else {
+                this.finalizeLoading();
+            }
 
         } catch (error) {
             console.error('[GameScene] Critical Initialization Error:', error);
