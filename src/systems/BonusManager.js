@@ -350,6 +350,7 @@ class BonusManager {
                 });
 
                 if (cloudData.timer <= 0) {
+                    this.scene.tweens.killTweensOf(cloudData.sprite); // Stop any expansion tween
                     cloudData.sprite.destroy();
                     this.activeBonuses.GAS.clouds.splice(i, 1);
                 }
