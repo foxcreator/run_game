@@ -20,7 +20,7 @@ import ChaserSticker from '../entities/ChaserSticker.js';
 import Coin from '../entities/Coin.js';
 import SmokeCloud from '../entities/bonuses/SmokeCloud.js';
 import Scooter from '../entities/bonuses/Scooter.js';
-import SpinnerBonus from '../entities/bonuses/SpinnerBonus.js';
+import BonusManager from '../systems/BonusManager.js';
 import Exchange from '../entities/Exchange.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
 import LoadingScreen from '../utils/LoadingScreen.js';
@@ -186,7 +186,9 @@ class GameScene extends Phaser.Scene {
             this.pauseMenu = null;
             this.autoPausedByBlur = false;
 
-            this.spinnerBonus = new SpinnerBonus(this, this.player, this.saveSystem);
+            // BONUS MANAGER
+            this.bonusManager = new BonusManager(this, this.player, this.saveSystem);
+
             this.pathRecalculationQueue = [];
             this.maxPathRecalculationsPerTick = 3;
 
@@ -364,9 +366,11 @@ class GameScene extends Phaser.Scene {
         if (this.moneyMultiplierController) {
             this.moneyMultiplierController.pause();
         }
-        if (this.spinnerBonus) {
-            this.spinnerBonus.pause();
+        if (this.moneyMultiplierController) {
+            this.moneyMultiplierController.pause();
         }
+        // BonusManager handles pause via update loop check automatically, 
+        // or we can add explicit pause if needed later.
 
         this.createPauseMenu();
     }
@@ -389,9 +393,10 @@ class GameScene extends Phaser.Scene {
         if (this.moneyMultiplierController) {
             this.moneyMultiplierController.resume();
         }
-        if (this.spinnerBonus) {
-            this.spinnerBonus.resume();
+        if (this.moneyMultiplierController) {
+            this.moneyMultiplierController.resume();
         }
+        // BonusManager resume logic not strictly needed if valid update loop check exists.
 
         if (this.pauseMenu) {
             if (this.pauseMenu.overlay) {
@@ -1317,8 +1322,8 @@ class GameScene extends Phaser.Scene {
         }
 
         // Оновлюємо нові системи прогресії
-        if (this.spinnerBonus) {
-            this.spinnerBonus.update(delta);
+        if (this.bonusManager) {
+            this.bonusManager.update(delta, time);
         }
         if (this.moneyMultiplierController) {
             this.moneyMultiplierController.update(delta);

@@ -92,23 +92,86 @@ class MenuScene extends Phaser.Scene {
                 this.showAboutInfo();
             }
         );
-        const donateButton = this.createMenuButton(
+        const shopButton = this.createMenuButton(
             menuBoxX,
             startY + (buttonHeight + buttonSpacing) * 3,
             buttonWidth,
             buttonHeight,
-            'ДОНАТ НА ЗСУ',
+            'МАГАЗИН',
             () => {
-                window.open(GAME_CONFIG.DONATE_LINK, '_blank');
+                this.scene.start('ShopScene');
             }
         );
+
+        // --- Custom Donate Button (Top Right) ---
+        const donateWidth = 200;
+        const donateHeight = 50;
+        const donateX = width - donateWidth / 2 - 20;
+        const donateY = 40;
+
+        const donateContainer = this.add.container(donateX, donateY);
+
+        // Background (Blue)
+        const donateBg = this.add.rectangle(0, 0, donateWidth, donateHeight, 0x0057B7, 1)
+            .setStrokeStyle(2, 0xFFD700); // Gold border
+
+        // Text
+        const donateText = this.add.text(0, 0, '🇺🇦 ДОНАТ НА ЗСУ', {
+            fontSize: '20px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5);
+
+        donateContainer.add([donateBg, donateText]);
+        donateContainer.setSize(donateWidth, donateHeight);
+        donateContainer.setInteractive(new Phaser.Geom.Rectangle(-donateWidth / 2, -donateHeight / 2, donateWidth, donateHeight), Phaser.Geom.Rectangle.Contains);
+
+        // Hover Effect
+        donateContainer.on('pointerover', () => {
+            if (this.audioManager) this.audioManager.playSound('menu_hover', false);
+            this.tweens.add({
+                targets: donateContainer,
+                scale: 1.05,
+                duration: 100
+            });
+            donateBg.setFillStyle(0x004494); // Darker blue
+        });
+
+        donateContainer.on('pointerout', () => {
+            this.tweens.add({
+                targets: donateContainer,
+                scale: 1,
+                duration: 100
+            });
+            donateBg.setFillStyle(0x0057B7);
+        });
+
+        donateContainer.on('pointerdown', () => {
+            if (this.audioManager) this.audioManager.playSound('menu_choise', false);
+            window.open(GAME_CONFIG.DONATE_LINK, '_blank');
+        });
+
+        // Pulse Animation (Heartbeat)
+        this.tweens.add({
+            targets: donateContainer,
+            scale: 1.02,
+            duration: 800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
         background.setDepth(0);
         menuShadow.setDepth(2);
         menuBox.setDepth(2);
         playButton.setDepth(3);
         settingsButton.setDepth(3);
         aboutButton.setDepth(3);
-        donateButton.setDepth(3);
+        shopButton.setDepth(3);
+        donateContainer.setDepth(10);
         if (GAME_CONFIG.UI.SHOW_CLICK_TO_START) {
             this.showClickToStartOverlay();
         }

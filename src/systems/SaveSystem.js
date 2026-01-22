@@ -47,19 +47,28 @@ class SaveSystem {
             this.save(data);
         }
     }
-    getSpinnerCount() {
+    // Generic Bonus Methods
+    getBonusCount(type) {
         const data = this.load();
-        return data?.spinnerCount || 0;
+        const bonuses = data?.bonuses || {};
+        return bonuses[type] || 0;
     }
-    setSpinnerCount(count) {
+    setBonusCount(type, count) {
         const data = this.load() || {};
-        data.spinnerCount = Math.max(0, count);
+        if (!data.bonuses) data.bonuses = {};
+        data.bonuses[type] = Math.max(0, count);
         this.save(data);
     }
-    addSpinnerCount(amount) {
-        const current = this.getSpinnerCount();
-        this.setSpinnerCount(current + amount);
+    addBonusCount(type, amount) {
+        const current = this.getBonusCount(type);
+        this.setBonusCount(type, current + amount);
     }
+
+    // Deprecated specific Spinner methods (map to generic)
+    getSpinnerCount() { return this.getBonusCount('SPINNER'); }
+    setSpinnerCount(count) { this.setBonusCount('SPINNER', count); }
+    addSpinnerCount(amount) { this.addBonusCount('SPINNER', amount); }
+
     clear() {
         try {
             localStorage.removeItem(this.STORAGE_KEY);

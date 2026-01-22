@@ -126,9 +126,21 @@ class BootScene extends Phaser.Scene {
         this.load.audio('engine_13', './src/assets/sounds/engine-sounds/motorseamless13.wav');
 
         // ⚠️ AMBIENT SOUNDS (247MB!) - повільне завантаження!
-        this.load.audio('ambience_birds', './src/assets/sounds/ambience/birds.wav');
-        this.load.audio('ambience_wind', './src/assets/sounds/ambience/wind.wav');
         this.load.audio('ambience_river', './src/assets/sounds/ambience/river.wav');
+
+        // ✅ BONUS ICONS
+        this.load.image('bonus_spinner', './src/assets/bonuses/bonus_spinner.png');
+        this.load.image('bonus_officnik', './src/assets/bonuses/bonus_officnik.png');
+        this.load.image('bonus_teren', './src/assets/bonuses/bonus_teren.png');
+        this.load.image('bonus_deputy', './src/assets/bonuses/bonus_deputy.png');
+        this.load.image('bonus_coffee', './src/assets/bonuses/bonus_coffee.png');
+        this.load.image('bonus_salo', './src/assets/bonuses/bonus_salo.png');
+        this.load.image('bonus_armor', './src/assets/bonuses/bonus_armor.png');
+        this.load.image('bonus_magnate', './src/assets/bonuses/bonus_magnate.png');
+        this.load.image('bonus_base', './src/assets/bonuses/bonus_coffee.png'); // Fallback
+
+        // ✅ NEW MENU BG
+        this.load.image('menu_city', './src/assets/menu/menu_city.png');
 
         this.load.on('loaderror', (file) => {
         });
