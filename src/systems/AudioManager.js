@@ -1,7 +1,7 @@
 class AudioManager {
     constructor(scene) {
         this.scene = scene;
-        this.musicTracks = ['back_1', 'back_2', 'back_3', 'back_4', 'back_5', 'back_6', 'back_7', 'back_8'];
+        this.musicTracks = ['back_1', 'back_2', 'back_3', 'back_4', 'back_5', 'back_6', 'back_7', 'back_8', 'back_9'];
         this.currentTrack = null;
         this.nextTrack = null;
         this.currentTrackKey = null;
@@ -18,12 +18,23 @@ class AudioManager {
         this.isInitialized = false;
     }
     init() {
-        if (this.isInitialized) return;
+        if (this.isInitialized) return true;
+
+        const existingTracks = [];
         for (const trackKey of this.musicTracks) {
-            if (!this.scene.cache.audio.exists(trackKey)) {
-                return false;
+            if (this.scene.cache.audio.exists(trackKey)) {
+                existingTracks.push(trackKey);
+            } else {
+                console.warn(`AudioManager: Music track '${trackKey}' not found in cache. Skipping.`);
             }
         }
+
+        if (existingTracks.length === 0) {
+            console.error('AudioManager: No music tracks found!');
+            return false;
+        }
+
+        this.musicTracks = existingTracks;
         this.isInitialized = true;
         return true;
     }
@@ -180,19 +191,33 @@ class AudioManager {
     playSound(soundKey, loop = false, volume = null, sourceKey = null) {
         if (!this.isInitialized || !this.soundsEnabled) return null;
         const audioFile = sourceKey || soundKey;
-        if (this.sounds[soundKey] && this.sounds[soundKey].isPlaying) {
-            return this.sounds[soundKey];
-        }
         if (!this.scene.cache.audio.exists(audioFile)) {
             return null;
         }
+
+        const finalVolume = volume !== null ? volume : this.soundsVolume;
+
+        // OPTIMIZATION: Fire-and-forget for non-looping sounds (One Shots)
+        if (!loop) {
+            this.scene.sound.play(audioFile, {
+                volume: finalVolume,
+                loop: false
+            });
+            return null; // We don't control one-shots after playing
+        }
+
+        // For looping sounds (Background noise, engines, running) - allow only one instance
+        if (this.sounds[soundKey] && this.sounds[soundKey].isPlaying) {
+            return this.sounds[soundKey];
+        }
+
         if (this.sounds[soundKey]) {
             this.sounds[soundKey].destroy();
         }
-        const finalVolume = volume !== null ? volume : this.soundsVolume;
+
         const sound = this.scene.sound.add(audioFile, {
             volume: finalVolume,
-            loop: loop
+            loop: true
         });
         sound.play();
         this.sounds[soundKey] = sound;

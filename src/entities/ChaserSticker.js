@@ -48,6 +48,31 @@ class ChaserSticker extends Chaser {
         if (this.hitCooldown > 0) {
             return;
         }
+
+        // Check Immunity (Deputy)
+        if (this.scene.bonusManager && this.scene.bonusManager.isImmune()) {
+            return;
+        }
+
+        // Check Armor
+        if (this.scene.bonusManager && this.scene.bonusManager.checkArmorHit()) {
+            this.hitCooldown = this.hitCooldownDuration;
+
+            // Knockback self slightly
+            if (this.target) {
+                const dx = this.target.x - this.x;
+                const dy = this.target.y - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > 0) {
+                    const backoffX = -(dx / distance) * this.hitBackoffDistance * 2;
+                    const backoffY = -(dy / distance) * this.hitBackoffDistance * 2;
+                    this.x += backoffX;
+                    this.y += backoffY;
+                }
+            }
+            return;
+        }
+
         if (this.captureSystem) {
             const damage = GAME_CONFIG.CHASERS.STICKER.CAPTURE_DAMAGE;
             this.captureSystem.addCapture(damage);

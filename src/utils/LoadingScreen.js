@@ -217,6 +217,11 @@ class LoadingScreen {
      * Знищує екран завантаження
      */
     destroy() {
+        // Try to resume audio context if suspended (fix for delay)
+        if (this.scene.sound && this.scene.sound.context && this.scene.sound.context.state === 'suspended') {
+            this.scene.sound.context.resume().catch(e => console.warn('Audio resume failed:', e));
+        }
+
         // Зупиняємо таймер
         if (this.tipTimer) {
             this.tipTimer.remove();

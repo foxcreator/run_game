@@ -454,6 +454,24 @@ class Car extends Phaser.GameObjects.Image {
     onCollisionWithEntity(entity) {
         if (!entity || !entity.active) return;
         if (this.collisionCooldown > 0) return;
+
+        // Player checks
+        if (entity.type === 'Player' && this.scene.bonusManager) {
+            if (this.scene.bonusManager.isImmune()) return;
+            if (this.scene.bonusManager.checkArmorHit()) {
+                this.collisionCooldown = 500;
+                // Maybe just a small push?
+                const dx = entity.x - this.x;
+                const dy = entity.y - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > 0) {
+                    entity.x += (dx / distance) * 20;
+                    entity.y += (dy / distance) * 20;
+                }
+                return;
+            }
+        }
+
         this.collisionCooldown = 500;
         const dx = entity.x - this.x;
         const dy = entity.y - this.y;
@@ -500,7 +518,7 @@ class Car extends Phaser.GameObjects.Image {
                 if (entity.triggerFall) {
                     entity.triggerFall();
                 }
-                
+
                 const distanceToPlayer = Phaser.Math.Distance.Between(
                     entity.x, entity.y,
                     this.scene.player.x, this.scene.player.y
@@ -510,7 +528,7 @@ class Car extends Phaser.GameObjects.Image {
                     volume = fallConfig.ENEMY_MAX_VOLUME;
                 } else if (distanceToPlayer < fallConfig.ENEMY_MAX_DISTANCE) {
                     const ratio = (fallConfig.ENEMY_MAX_DISTANCE - distanceToPlayer) /
-                                 (fallConfig.ENEMY_MAX_DISTANCE - fallConfig.ENEMY_MIN_DISTANCE);
+                        (fallConfig.ENEMY_MAX_DISTANCE - fallConfig.ENEMY_MIN_DISTANCE);
                     volume = fallConfig.ENEMY_MAX_VOLUME * ratio;
                 }
                 if (volume > 0) {

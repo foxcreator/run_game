@@ -55,7 +55,7 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         this.audioManager = null;
         this.soundId = `enemy_${Date.now()}_${Math.random()}`;
         this.soundPlaybackRate = 0.95 + Math.random() * 0.1;
-        
+
         // Hospital Mechanic - лічильник ударів машин
         this.timesHitByCar = 0;
         this.isHospitalized = false;
@@ -98,12 +98,12 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
                 this.setDepth(GAME_CONFIG.CHASERS.COMMON.DEPTH);
             }
         } else {
-        const textureKey = spriteManager.createChaserSprite(scene, this.type);
-        this.setTexture(textureKey);
+            const textureKey = spriteManager.createChaserSprite(scene, this.type);
+            this.setTexture(textureKey);
             const config = spriteManager.CHASER_SPRITES.STICKER;
-        const size = config.radius * 2;
-        this.setDisplaySize(size, size);
-        this.setDepth(GAME_CONFIG.CHASERS.COMMON.DEPTH);
+            const size = config.radius * 2;
+            this.setDisplaySize(size, size);
+            this.setDepth(GAME_CONFIG.CHASERS.COMMON.DEPTH);
         }
     }
     createAnimations(scene) {
@@ -211,45 +211,45 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
             this.body.setVelocity(0, 0);
         }
     }
-    
+
     /**
      * Викликається коли ворога збила машина (Hospital Mechanic)
      */
     triggerFall() {
         if (this.isHospitalized) return;
-        
+
         // Перевіряємо cooldown щоб не рахувати один удар багато разів
         if (this.carHitCooldown > 0) {
             return;
         }
-        
+
         this.timesHitByCar++;
         this.carHitCooldown = GAME_CONFIG.HOSPITAL.HIT_COOLDOWN;
-        
-        
+
+
         // Перевіряємо чи досягли ліміту
         if (this.timesHitByCar >= GAME_CONFIG.HOSPITAL.HITS_TO_HOSPITALIZE) {
             this.hospitalize();
         }
     }
-    
+
     /**
      * Госпіталізує ворога (видаляє з гри)
      */
     hospitalize() {
         if (this.isHospitalized) return;
-        
+
         this.isHospitalized = true;
-        
-        
+
+
         // Викликаємо подію для GameScene
         this.scene.events.emit('enemy-hospitalized', this);
-        
+
         // Зупиняємо звуки
         if (this.audioManager && this.soundId) {
             this.audioManager.stopSound(this.soundId);
         }
-        
+
         // Анімація зникнення (fade out)
         this.scene.tweens.add({
             targets: this,
@@ -261,29 +261,103 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
             }
         });
     }
+    setLureTarget(x, y, duration) {
+        this.lureTarget = { x, y };
+        this.lureTimer = duration;
+        this.isLured = true;
+    }
+
+    playFallAnimation() {
+        if (this.isHospitalized) return;
+        // Simple tween for falling/spinning
+        this.scene.tweens.add({
+            targets: this,
+            angle: 360,
+            scale: 0.8,
+            duration: 500,
+            yoyo: true,
+            onComplete: () => {
+                this.angle = 0;
+                this.scale = 1; // Reset or keep? Resetting for now.
+                if (this.type === 'Blocker') this.setDisplaySize(GAME_CONFIG.CHASERS.BLOCKER.DISPLAY_SIZE, GAME_CONFIG.CHASERS.BLOCKER.DISPLAY_SIZE);
+                else if (this.type === 'Sticker') this.setDisplaySize(GAME_CONFIG.CHASERS.STICKER.DISPLAY_SIZE, GAME_CONFIG.CHASERS.STICKER.DISPLAY_SIZE);
+            }
+        });
+    }
+
+    playCoughAnimation() {
+        // Just a shake or tint for now
+        this.scene.tweens.add({
+            targets: this,
+            x: '+=5',
+            duration: 50,
+            yoyo: true,
+            repeat: 5
+        });
+    }
+
+    playEatAnimation() {
+        // Stop moving and "eat"
+        if (this.body) this.body.setVelocity(0, 0);
+    }
+
     update(delta, time = 0) {
         if (!this.active) return;
-        
-        // Оновлюємо cooldown ударів машин
+
+        // Hospital mechanic
         if (this.carHitCooldown > 0) {
             this.carHitCooldown -= delta;
-            if (this.carHitCooldown < 0) {
-                this.carHitCooldown = 0;
-            }
+            if (this.carHitCooldown < 0) this.carHitCooldown = 0;
         }
-        
+
         if (this.isFrozen) {
             this.frozenTimer -= delta;
             if (this.frozenTimer <= 0) {
                 this.isFrozen = false;
                 this.frozenTimer = 0;
             } else {
-                if (this.body) {
-                    this.body.setVelocity(0, 0);
-                }
+                if (this.body) this.body.setVelocity(0, 0);
                 return;
             }
         }
+
+        // Lure Update
+        if (this.isLured) {
+            this.lureTimer -= delta;
+            if (this.lureTimer <= 0) {
+                this.isLured = false;
+                this.lureTarget = null;
+            } else {
+                // Move towards lure
+                if (this.lureTarget) {
+                    const dx = this.lureTarget.x - this.x;
+                    const dy = this.lureTarget.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance > 20) {
+                        const speed = this.speed * this.getSpeedMultiplier();
+                        this.scene.physics.moveTo(this, this.lureTarget.x, this.lureTarget.y, speed);
+                    } else {
+                        // Eating
+                        if (this.body) this.body.setVelocity(0, 0);
+                    }
+                    this.updateVisuals();
+                    return; // Skip normal movement
+                }
+            }
+        }
+
+        // Immunity check logic
+        // We need to know if player is immune. Chaser doesn't know about BonusManager directly.
+        // But we can check a flag on player if we want, or GameScene can skip update? 
+        // Better: Chaser checks target. But if "Deputy" is active, player is ignored.
+        // We can check `this.scene.bonusManager.isImmune()` if available.
+        if (this.scene.bonusManager && this.scene.bonusManager.isImmune()) {
+            // Idle behavior
+            if (this.body) this.body.setVelocity(0, 0);
+            this.updateVisuals();
+            return;
+        }
+
         this.updateSpeedDebuffs(delta);
         this.updateLostLock(delta);
         if (!this.target) return;
@@ -362,6 +436,21 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         }
         return minMultiplier;
     }
+    applySlowdown(multiplier, duration) {
+        // Check if we already have a slowdown of this strength
+        const existing = this.speedDebuffs.find(d => Math.abs(d.multiplier - multiplier) < 0.01);
+        if (existing) {
+            if (existing.duration < duration) {
+                existing.duration = duration;
+            }
+        } else {
+            this.speedDebuffs.push({
+                multiplier: multiplier,
+                duration: duration
+            });
+        }
+    }
+
     checkDirectPathToTarget() {
         if (!this.target || !this.navigationSystem) {
             return false;
@@ -624,16 +713,16 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
             } else {
                 const hasDirectPath = this.checkDirectPathToTarget();
                 if (hasDirectPath) {
-        const dx = this.target.x - this.x;
-        const dy = this.target.y - this.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance > 0) {
-            const speedMultiplier = this.getSpeedMultiplier();
+                    const dx = this.target.x - this.x;
+                    const dy = this.target.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance > 0) {
+                        const speedMultiplier = this.getSpeedMultiplier();
                         let velocityX = (dx / distance) * this.speed * speedMultiplier;
                         let velocityY = (dy / distance) * this.speed * speedMultiplier;
                         velocityX += velocityX * this.separationForce.x;
                         velocityY += velocityY * this.separationForce.y;
-            this.setVelocity(velocityX, velocityY);
+                        this.setVelocity(velocityX, velocityY);
                     }
                 } else {
                     if (this.body) {
