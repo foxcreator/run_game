@@ -1426,21 +1426,7 @@ class GameScene extends Phaser.Scene {
         }
         if (this.hud) {
             this.hud.update(delta);
-            this.children.bringToTop(this.hud.staminaBarBg);
-            this.children.bringToTop(this.hud.staminaBar);
-            this.children.bringToTop(this.hud.staminaText);
-            this.children.bringToTop(this.hud.dashCooldownBg);
-            this.children.bringToTop(this.hud.dashCooldownBar);
-            this.children.bringToTop(this.hud.dashText);
-            this.children.bringToTop(this.hud.captureBarBg);
-            this.children.bringToTop(this.hud.captureBar);
-            this.children.bringToTop(this.hud.captureText);
-            if (this.hud.moneyText) {
-                this.children.bringToTop(this.hud.moneyText);
-            }
-            if (this.hud.bonusIconsContainer) {
-                this.children.bringToTop(this.hud.bonusIconsContainer);
-            }
+            // Optimization: Depths are already set high, no need to bringToTop every frame
         }
         if (this.minimap) {
             this.minimap.update();
