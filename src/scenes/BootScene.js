@@ -127,7 +127,10 @@ class BootScene extends Phaser.Scene {
         this.load.audio('engine_13', './src/assets/sounds/engine-sounds/motorseamless13.wav');
 
         // ⚠️ AMBIENT SOUNDS (Optimized MP3)
+        // ⚠️ AMBIENT SOUNDS (Optimized MP3)
         this.load.audio('ambience_river', './src/assets/sounds/ambience/river.mp3');
+        this.load.audio('ambience_birds', './src/assets/sounds/ambience/birds.mp3');
+        this.load.audio('ambience_wind', './src/assets/sounds/ambience/wind.mp3');
 
         // ✅ BONUS ICONS
         this.load.image('bonus_spinner', './src/assets/bonuses/bonus_spinner.png');
