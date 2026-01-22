@@ -35,7 +35,7 @@ class HUD {
         // New list sorted by price (asc) from config manual check:
         // COFFEE (100), GAS (200), SALO (250), MAGNET (300), SPINNER (450), ARMOR (500), DEPUTY (800), MAGNATE (1000)
 
-        const sortedKeys = ['COFFEE', 'GAS', 'SALO', 'MAGNET', 'SPINNER', 'ARMOR', 'DEPUTY', 'MAGNATE'];
+        const sortedKeys = ['SPINNER', 'MAGNET', 'GAS', 'DEPUTY', 'COFFEE', 'SALO', 'ARMOR', 'MAGNATE'];
 
         const slotSize = 50;
         const spacing = 10;

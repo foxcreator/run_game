@@ -9,12 +9,13 @@ class ShopScene extends Phaser.Scene {
     create() {
         this.saveSystem = new SaveSystem();
         this.bankMoney = this.saveSystem.getBankedMoney();
+        const { width, height } = this.cameras.main;
 
         // Background
-        this.add.rectangle(0, 0, this.cameras.main.width, this.cameras.main.height, 0x1a1a1a).setOrigin(0);
+        this.add.rectangle(0, 0, width, height, 0x1a1a1a).setOrigin(0);
 
         // Header
-        this.add.text(this.cameras.main.width / 2, 50, 'МАГАЗИН', {
+        this.add.text(width / 2, 60, 'МАГАЗИН', {
             fontSize: '40px',
             fill: '#ffd700',
             fontFamily: 'Arial',
@@ -23,7 +24,7 @@ class ShopScene extends Phaser.Scene {
             strokeThickness: 4
         }).setOrigin(0.5);
 
-        this.moneyText = this.add.text(this.cameras.main.width - 50, 50, `Банк: $${this.bankMoney}`, {
+        this.moneyText = this.add.text(width - 50, 50, `Банк: $${this.bankMoney}`, {
             fontSize: '24px',
             fill: '#ffffff',
             fontFamily: 'Arial',
@@ -33,15 +34,17 @@ class ShopScene extends Phaser.Scene {
 
         // Bonuses Grid
         const bonuses = Object.entries(GAME_CONFIG.BONUSES); // Array of [KEY, config]
-
-        // Sort by PRICE ascending
         bonuses.sort((a, b) => a[1].PRICE - b[1].PRICE);
 
-        const startX = 200;
-        const startY = 240; // Moved down to avoid header overlap
-        const paddingX = 250;
-        const paddingY = 270;
         const cols = 4;
+        const cardWidth = 220;
+        const paddingX = 250; // Distance between centers
+        const paddingY = 270;
+
+        // Calculate total grid layout width to center it
+        const totalGridWidth = (cols - 1) * paddingX;
+        const startX = (width - totalGridWidth) / 2;
+        const startY = 200; // Starting Y Position
 
         bonuses.forEach(([key, bonus], index) => {
             const col = index % cols;
@@ -52,22 +55,25 @@ class ShopScene extends Phaser.Scene {
             this.createProductCard(x, y, bonus, key);
         });
 
-        // Close Button
-        const closeBg = this.add.rectangle(this.cameras.main.width / 2, this.cameras.main.height - 60, 200, 50, 0x444444)
+        // Close Button (Moved down)
+        const closeY = height - 50;
+        const closeBg = this.add.rectangle(width / 2, closeY, 200, 50, 0x444444)
             .setInteractive({ useHandCursor: true });
         closeBg.setStrokeStyle(2, 0x888888);
 
-        const closeText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height - 60, 'НАЗАД', {
+        const closeText = this.add.text(width / 2, closeY, 'НАЗАД [ESC]', {
             fontSize: '24px',
             fill: '#ffffff'
         }).setOrigin(0.5);
 
-        closeBg.on('pointerdown', () => {
-            this.scene.start('MenuScene');
-        });
+        const goBack = () => this.scene.start('MenuScene');
 
+        closeBg.on('pointerdown', goBack);
         closeBg.on('pointerover', () => closeBg.setFillStyle(0x666666));
         closeBg.on('pointerout', () => closeBg.setFillStyle(0x444444));
+
+        // ESC Key handling
+        this.input.keyboard.on('keydown-ESC', goBack);
     }
 
     createProductCard(x, y, bonus, bonusKey) {
@@ -148,6 +154,23 @@ class ShopScene extends Phaser.Scene {
                 this.cameras.main.shake(100, 0.005);
                 btnBg.setFillStyle(0x880000);
                 this.time.delayedCall(200, () => btnBg.setFillStyle(0x008800));
+
+                // Show floating error text
+                const errText = this.add.text(x, y + 100, 'Не вистачає грошей!', {
+                    fontSize: '18px',
+                    fill: '#ff0000',
+                    fontFamily: 'Arial',
+                    stroke: '#000000',
+                    strokeThickness: 3
+                }).setOrigin(0.5).setDepth(100);
+
+                this.tweens.add({
+                    targets: errText,
+                    y: y + 50,
+                    alpha: 0,
+                    duration: 1000,
+                    onComplete: () => errText.destroy()
+                });
             }
         });
     }

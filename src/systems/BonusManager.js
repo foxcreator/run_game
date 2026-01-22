@@ -17,6 +17,7 @@ class BonusManager {
             SPINNER: { cooldown: 0 } // Just cooldown tracking mostly, instant effect
         };
 
+        this.cooldowns = {};
         this.bonusKeys = {};
         this.setupInput();
     }
@@ -72,13 +73,13 @@ class BonusManager {
             return;
         }
 
-        // Check Cooldown (Local or Global logic? Assuming Global cooldown per bonus type isnt implemented in SaveSystem yet, so local tracking)
-        // If we want cooldowns to persist, we'd need to save 'lastUsedTime'. For now, let's use runtime cooldown.
-        // But wait, user might spam keys.
-        // Let's implement cooldown check.
-        // NOTE: For MVP, maybe cooldowns are just runtime.
+        // Check Cooldown
+        if (this.isCooldownActive(type)) {
+            const remaining = Math.ceil((this.cooldowns[type] - Date.now()) / 1000);
+            this.scene.notificationManager.show(`${config.NAME} перезаряджається (${remaining}с)`, 1);
+            return;
+        }
 
-        // Decrement count
         // Special handling: Armor might check if already active?
         if (type === 'ARMOR' && this.activeBonuses.ARMOR.active) {
             this.scene.notificationManager.show(`Броня ще активна!`, 1);
@@ -86,6 +87,11 @@ class BonusManager {
         }
 
         this.setBonusCount(type, count - 1);
+
+        // Set Cooldown
+        if (config.COOLDOWN > 0) {
+            this.cooldowns[type] = Date.now() + config.COOLDOWN;
+        }
 
         // Trigger Effect
         switch (type) {
@@ -104,8 +110,34 @@ class BonusManager {
 
         // Update HUD (emit event or direct call)
         if (this.scene.hud) {
-            // HUD update logic will be handled in update() or event
+            this.scene.hud.updateBonusPanel();
         }
+    }
+
+    isCooldownActive(type) {
+        if (!this.cooldowns || !this.cooldowns[type]) return false;
+        return Date.now() < this.cooldowns[type];
+    }
+
+    isEffectActive(type) {
+        if (!this.activeBonuses || !this.activeBonuses[type]) return false;
+        const bonus = this.activeBonuses[type];
+
+        // Simple active flag
+        if (bonus.active === true) return true;
+
+        // Check for entity-based bonuses
+        // Gas Clouds
+        if (type === 'GAS' && bonus.clouds && bonus.clouds.length > 0) return true;
+        // Salo Lures
+        if (type === 'SALO' && bonus.lures && bonus.lures.length > 0) return true;
+
+        return false;
+    }
+
+    getCooldownRemaining(type) {
+        if (!this.isCooldownActive(type)) return 0;
+        return Math.ceil((this.cooldowns[type] - Date.now()) / 1000);
     }
 
     // --- Specific Activations ---
@@ -138,27 +170,18 @@ class BonusManager {
                     enemy.setFrozen(duration);
                 }
 
-                // Trigger fall animation
-                if (enemy.playFallAnimation) { // Need to implement this in Chaser
-                    enemy.playFallAnimation();
-                } else {
-                    // Fallback if method not exists yet
-                    // Just spin or something?
-                    enemy.setTint(0x0000ff);
-                }
-
                 hitCount++;
             }
         });
 
-        // Visual Effect?
-        // Maybe a spinner sprite spinning around player for a second
+        // Visual Effect
         const spinnerSprite = this.scene.add.sprite(this.player.x, this.player.y, 'bonus_spinner');
         spinnerSprite.setDepth(100);
+        spinnerSprite.setScale(0.5); // Start small
         this.scene.tweens.add({
             targets: spinnerSprite,
             angle: 360 * 3,
-            scale: { from: 0.5, to: 2 },
+            scale: 2, // Grow
             alpha: { from: 1, to: 0 },
             duration: 500,
             onComplete: () => spinnerSprite.destroy()
@@ -168,28 +191,45 @@ class BonusManager {
     activateMagnet(config) {
         this.activeBonuses.MAGNET.active = true;
         this.activeBonuses.MAGNET.timer = config.DURATION;
-        // Maybe add visual effect to player
+        // Visual effect on player
+        if (!this.activeBonuses.MAGNET.object) {
+            const ring = this.scene.add.circle(this.player.x, this.player.y, config.RADIUS, 0xffd700, 0.1);
+            ring.setStrokeStyle(2, 0xffd700, 0.5);
+            ring.setDepth(this.player.depth - 1);
+            this.activeBonuses.MAGNET.object = ring;
+        }
     }
 
     activateGas(config) {
-        // Create cloud behind player
-        const cloud = this.scene.add.sprite(this.player.x, this.player.y, 'effect_gas_cloud');
+        // Create cloud behind player (using 'cloud' texture from BootScene)
+        const cloud = this.scene.add.sprite(this.player.x, this.player.y, 'cloud');
         this.scene.physics.add.existing(cloud);
         cloud.setDepth(5);
+        cloud.setScale(2.5); // Start big
+        cloud.setAlpha(0.6);
+
+        // Animate cloud expansion
+        this.scene.tweens.add({
+            targets: cloud,
+            scale: 3.5,
+            alpha: 0,
+            angle: 180,
+            duration: config.CLOUD_DURATION || 10000,
+            onComplete: () => {
+                // Cleanup handled in update via timer, but this ensures visual fade
+            }
+        });
 
         this.activeBonuses.GAS.clouds.push({
             sprite: cloud,
             timer: config.CLOUD_DURATION
         });
-
-        // Gas Logic is handled in update loop (collision check)
     }
 
     activateDeputy(config) {
         this.activeBonuses.DEPUTY.active = true;
         this.activeBonuses.DEPUTY.timer = config.DURATION;
         this.player.setAlpha(0.5); // Ghostly
-        // Logic in Chaser to ignore player
     }
 
     activateCoffee(config) {
@@ -200,8 +240,6 @@ class BonusManager {
         if (this.player.stamina !== undefined) {
             this.player.stamina = GAME_CONFIG.PLAYER.STAMINA_MAX;
         }
-        // Speed boost? Or just infinite stamina?
-        // Infinite stamina handles itself if we preventing drain in player.
     }
 
     activateSalo(config) {
@@ -209,25 +247,28 @@ class BonusManager {
         const lure = this.scene.add.sprite(this.player.x, this.player.y, 'bonus_salo');
         this.scene.physics.add.existing(lure);
         lure.setDepth(5);
+        lure.setScale(0.12);
 
         this.activeBonuses.SALO.lures.push({
             sprite: lure,
             timer: config.LURE_DURATION
         });
-
-        // Alert enemies to go to this position
-        // Logic in Chaser
     }
 
     activateArmor(config) {
+        if (this.activeBonuses.ARMOR.object) {
+            this.activeBonuses.ARMOR.object.destroy();
+        }
+
         this.activeBonuses.ARMOR.active = true;
         this.activeBonuses.ARMOR.timer = config.DURATION;
         this.activeBonuses.ARMOR.hitsLeft = config.HITS;
 
-        // Visual
-        const shield = this.scene.add.sprite(this.player.x, this.player.y, 'effect_shield');
+        // Visual: Use bonus_armor as shield
+        const shield = this.scene.add.sprite(this.player.x, this.player.y, 'bonus_armor');
         shield.setDepth(this.player.depth + 1);
-        shield.setAlpha(0.6);
+        shield.setAlpha(0.7);
+        shield.setScale(0.3); // Adjust scale
         this.activeBonuses.ARMOR.object = shield;
     }
 
@@ -235,12 +276,10 @@ class BonusManager {
         this.activeBonuses.MAGNATE.active = true;
         this.activeBonuses.MAGNATE.timer = config.DURATION;
 
-        // Apply multiplier if not already higher
         if (this.scene.moneyMultiplier < config.MULTIPLIER) {
             this.scene.moneyMultiplier = config.MULTIPLIER;
         }
 
-        // Visual?
         this.scene.notificationManager.show('💸 БІЗНЕС ЧАС! x2 БАБЛО!', 3);
         if (this.scene.sound) this.scene.sound.play('bonus_powerup');
     }
@@ -251,25 +290,40 @@ class BonusManager {
         // Magnet
         if (this.activeBonuses.MAGNET.active) {
             this.activeBonuses.MAGNET.timer -= delta;
+
+            // Update visual ring position
+            if (this.activeBonuses.MAGNET.object) {
+                this.activeBonuses.MAGNET.object.setPosition(this.player.x, this.player.y);
+            }
+
             if (this.activeBonuses.MAGNET.timer <= 0) {
                 this.activeBonuses.MAGNET.active = false;
+                if (this.activeBonuses.MAGNET.object) {
+                    this.activeBonuses.MAGNET.object.destroy();
+                    this.activeBonuses.MAGNET.object = null;
+                }
             } else {
                 // Pull coins
                 const radius = GAME_CONFIG.BONUSES.MAGNET.RADIUS;
                 const speed = GAME_CONFIG.BONUSES.MAGNET.SPEED;
 
-                // We need access to coins. Assuming GameScene has 'pickups' or 'coins' group/array
-                // Checking this.scene.pickups
-                if (this.scene.pickups) {
-                    this.scene.pickups.forEach(pickup => {
-                        if (pickup.active && (pickup.texture.key.includes('coin'))) { // Heuristic check
+                this.scene.pickups.forEach(pickup => {
+                    try {
+                        if (!pickup) return;
+                        if (!pickup.active) return;
+                        if (!pickup.texture) return;
+                        if (!pickup.texture.key) return; // Paranoia check
+
+                        if (pickup.texture.key.includes('coin')) {
                             const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, pickup.x, pickup.y);
                             if (dist <= radius) {
                                 this.scene.physics.moveToObject(pickup, this.player, speed);
                             }
                         }
-                    });
-                }
+                    } catch (e) {
+                        console.warn('Error in Magnet bonus loop:', e, pickup);
+                    }
+                });
             }
         }
 
@@ -286,7 +340,7 @@ class BonusManager {
                         const dist = Phaser.Math.Distance.Between(cloudData.sprite.x, cloudData.sprite.y, enemy.x, enemy.y);
                         if (dist <= radius) {
                             if (enemy.applySlowdown) {
-                                enemy.applySlowdown(GAME_CONFIG.BONUSES.GAS.SLOWDOWN_FACTOR, 1000); // Apply for 1 sec constantly refreshing
+                                enemy.applySlowdown(GAME_CONFIG.BONUSES.GAS.SLOWDOWN_FACTOR, 1000);
                             }
                             if (enemy.playCoughAnimation && !enemy.anims.isPlaying) {
                                 enemy.playCoughAnimation();
@@ -347,26 +401,28 @@ class BonusManager {
             }
         }
 
-        if (this.activeBonuses.ARMOR.timer <= 0) {
+        // Armor Update (Follow player)
+        if (this.activeBonuses.ARMOR.active && this.activeBonuses.ARMOR.object) {
+            this.activeBonuses.ARMOR.object.setPosition(this.player.x, this.player.y);
+            this.activeBonuses.ARMOR.timer -= delta;
+            if (this.activeBonuses.ARMOR.timer <= 0) {
+                this.deactivateArmor();
+            }
+        } else if (this.activeBonuses.ARMOR.active && !this.activeBonuses.ARMOR.object) {
+            // Lost object somehow
+            this.deactivateArmor();
+        } else if (this.activeBonuses.ARMOR.timer <= 0 && this.activeBonuses.ARMOR.active) {
             this.deactivateArmor();
         }
 
         // Magnate
         if (this.activeBonuses.MAGNATE.active) {
             this.activeBonuses.MAGNATE.timer -= delta;
-
-            // Ensure multiplier stays at least 2 if not overridden by higher (x5)
-            // Assuming x5 controller might overwrite it, or we overwrite it.
-            // Safe logic: maximize
             if (this.scene.moneyMultiplier < 2) {
                 this.scene.moneyMultiplier = 2;
             }
-
             if (this.activeBonuses.MAGNATE.timer <= 0) {
                 this.activeBonuses.MAGNATE.active = false;
-                // Reset to 1 ONLY if we are the ones keeping it at 2
-                // If it's > 2, leave it (x5 pickup). 
-                // If it's 2, reset to 1.
                 if (this.scene.moneyMultiplier === 2) {
                     this.scene.moneyMultiplier = 1;
                 }
@@ -388,7 +444,19 @@ class BonusManager {
         // Returns true if armor absorbed the hit
         if (this.activeBonuses.ARMOR.active && this.activeBonuses.ARMOR.hitsLeft > 0) {
             this.activeBonuses.ARMOR.hitsLeft--;
-            this.scene.sound.play('bonus_shield_activate'); // Clang sound maybe
+            if (this.scene.sound) this.scene.sound.play('bonus_shield_activate'); // Clang sound
+
+            // Visual feedback of hit
+            if (this.activeBonuses.ARMOR.object) {
+                this.scene.tweens.add({
+                    targets: this.activeBonuses.ARMOR.object,
+                    alpha: 0.2,
+                    yoyo: true,
+                    duration: 100,
+                    repeat: 1
+                });
+            }
+
             if (this.activeBonuses.ARMOR.hitsLeft <= 0) {
                 this.deactivateArmor();
             }

@@ -436,6 +436,21 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         }
         return minMultiplier;
     }
+    applySlowdown(multiplier, duration) {
+        // Check if we already have a slowdown of this strength
+        const existing = this.speedDebuffs.find(d => Math.abs(d.multiplier - multiplier) < 0.01);
+        if (existing) {
+            if (existing.duration < duration) {
+                existing.duration = duration;
+            }
+        } else {
+            this.speedDebuffs.push({
+                multiplier: multiplier,
+                duration: duration
+            });
+        }
+    }
+
     checkDirectPathToTarget() {
         if (!this.target || !this.navigationSystem) {
             return false;

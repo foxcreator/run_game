@@ -36,9 +36,9 @@ const config = {
         createContainer: true
     },
     audio: {
-        disableWebAudio: false,  // Використовувати Web Audio API
+        disableWebAudio: false,
         noAudio: false,
-        context: false  // Не створювати контекст одразу (економить ресурси)
+        context: false // Не створювати контекст одразу
     },
     scene: [BootScene, MenuScene, GameScene, ResultScene, ShopScene]
 };
