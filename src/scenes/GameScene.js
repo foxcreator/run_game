@@ -1330,7 +1330,7 @@ class GameScene extends Phaser.Scene {
         }
 
         this.checkPoliceSiren(time);
-        // this.updateRiverSound(); // Optimized out for Safari
+        this.updateRiverSound();
         this.timeSurvived += delta / 1000;
         if (this.timeSurvived >= this.nextBonusTime) {
             const earnedSinceLastBonus = this.currentBankedMoney - this.lastBonusBankAmount;
