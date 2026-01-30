@@ -57,6 +57,9 @@ class GameScene extends Phaser.Scene {
         this.time.delayedCall(50, () => {
             this.startAsyncInitialization();
         });
+
+        // Initialize kiosk message text holder
+        this.kioskMessageText = null;
     }
 
     async startAsyncInitialization() {
@@ -290,51 +293,64 @@ class GameScene extends Phaser.Scene {
      */
     setupProgressionEvents() {
         // Подія підкріплення ворогів
-        this.events.on('spawn-reinforcement', (data) => {
-
-            // Створюємо ворогів по черзі: 1 Blocker, 1 Sticker, 1 Blocker, 1 Sticker...
-            const types = ['Blocker', 'Sticker'];
-            for (let i = 0; i < data.count; i++) {
-                const type = types[i % types.length];  // Чергуємо типи
-                const chaser = this.spawnChaser(type);
-                if (chaser) {
-                } else {
-                }
-            }
-        });
+        this.events.on('spawn-reinforcement', this.onSpawnReinforcement, this);
 
         // Подія госпіталізації ворога
-        this.events.on('enemy-hospitalized', (enemy) => {
-
-            // Показуємо повідомлення
-            const messages = GAME_CONFIG.HOSPITAL.MESSAGES;
-            const message = messages[Math.floor(Math.random() * messages.length)];
-            this.notificationManager.show(
-                message,
-                GAME_CONFIG.NOTIFICATIONS.PRIORITY.MEDIUM
-            );
-
-            // Зменшуємо лічильник ворогів
-            if (this.enemyDifficultyController) {
-                this.enemyDifficultyController.decrementEnemyCount();
-            }
-
-            // Видаляємо ворога зі списку
-            const index = this.chasers.indexOf(enemy);
-            if (index > -1) {
-                this.chasers.splice(index, 1);
-            }
-        });
+        this.events.on('enemy-hospitalized', this.onEnemyHospitalized, this);
 
         // Подія активації множника грошей
-        this.events.on('money-multiplier-activated', (multiplier) => {
-            this.moneyMultiplier = multiplier;
-        });
+        this.events.on('money-multiplier-activated', this.onMoneyMultiplierActivated, this);
 
         // Подія деактивації множника грошей
-        this.events.on('money-multiplier-deactivated', () => {
-            this.moneyMultiplier = 1;
+        this.events.on('money-multiplier-deactivated', this.onMoneyMultiplierDeactivated, this);
+
+        // Listen for resume event (e.g. returning from Shop)
+        this.events.on('resume', () => {
+            if (this.pauseMenu) {
+                this.pauseMenu.setVisible(true);
+            }
         });
+    }
+
+    onSpawnReinforcement(data) {
+        // Створюємо ворогів по черзі: 1 Blocker, 1 Sticker, 1 Blocker, 1 Sticker...
+        const types = ['Blocker', 'Sticker'];
+        for (let i = 0; i < data.count; i++) {
+            const type = types[i % types.length];  // Чергуємо типи
+            const chaser = this.spawnChaser(type);
+            if (chaser) {
+                // Success spawn logic if needed
+            }
+        }
+    }
+
+    onEnemyHospitalized(enemy) {
+        // Показуємо повідомлення
+        const messages = GAME_CONFIG.HOSPITAL.MESSAGES;
+        const message = messages[Math.floor(Math.random() * messages.length)];
+        this.notificationManager.show(
+            message,
+            GAME_CONFIG.NOTIFICATIONS.PRIORITY.MEDIUM
+        );
+
+        // Зменшуємо лічильник ворогів
+        if (this.enemyDifficultyController) {
+            this.enemyDifficultyController.decrementEnemyCount();
+        }
+
+        // Видаляємо ворога зі списку
+        const index = this.chasers.indexOf(enemy);
+        if (index > -1) {
+            this.chasers.splice(index, 1);
+        }
+    }
+
+    onMoneyMultiplierActivated(multiplier) {
+        this.moneyMultiplier = multiplier;
+    }
+
+    onMoneyMultiplierDeactivated() {
+        this.moneyMultiplier = 1;
     }
     handleWindowBlur() {
         if (!this.isPaused && !this.captureSystem?.isMaxed()) {
@@ -425,8 +441,8 @@ class GameScene extends Phaser.Scene {
             strokeThickness: 4
         }).setOrigin(0.5).setScrollFactor(0);
         this.pauseMenu.add(title);
-        const menuBoxWidth = 400;
-        const menuBoxHeight = 280;
+        const menuBoxWidth = 420;
+        const menuBoxHeight = 380;
         const menuBox = this.add.rectangle(0, 0, menuBoxWidth, menuBoxHeight, 0x808080, 0.9);
         menuBox.setStrokeStyle(3, 0x606060);
         menuBox.setScrollFactor(0);
@@ -434,16 +450,28 @@ class GameScene extends Phaser.Scene {
         const buttonWidth = 300;
         const buttonHeight = 60;
         const buttonSpacing = 70;
-        const startY = -buttonSpacing;
+        const startY = -buttonSpacing * 1.5;
         const resumeButton = this.createPauseButton(0, startY, buttonWidth, buttonHeight, 'ПРОДОВЖИТИ', () => {
             this.resumeGame();
         });
         this.pauseMenu.add(resumeButton);
-        const settingsButton = this.createPauseButton(0, startY + buttonSpacing, buttonWidth, buttonHeight, 'НАЛАШТУВАННЯ', () => {
+
+        const shopButton = this.createPauseButton(0, startY + buttonSpacing, buttonWidth, buttonHeight, 'МАГАЗИН', () => {
+            this.scene.pause(); // Pause GameScene update loop explicitly (though launch might do it depending on config, explicit is safer)
+            this.scene.launch('ShopScene', { returnScene: 'GameScene', isOverlay: true });
+            // We don't destroy pause menu, we keep it for when we return
+            if (this.pauseMenu) {
+                this.pauseMenu.setVisible(false); // Optionally hide it so it doesn't bleed through transparency
+            }
+        });
+        this.pauseMenu.add(shopButton);
+
+        const settingsButton = this.createPauseButton(0, startY + buttonSpacing * 2, buttonWidth, buttonHeight, 'НАЛАШТУВАННЯ', () => {
             this.createPauseSettingsMenu();
         });
         this.pauseMenu.add(settingsButton);
-        const saveAndExitButton = this.createPauseButton(0, startY + buttonSpacing * 2, buttonWidth, buttonHeight, 'ЗБЕРЕГТИ І ВИЙТИ', () => {
+
+        const saveAndExitButton = this.createPauseButton(0, startY + buttonSpacing * 3, buttonWidth, buttonHeight, 'ЗБЕРЕГТИ І ВИЙТИ', () => {
             if (this.audioManager) {
                 this.audioManager.stopMusic();
             }
@@ -1154,6 +1182,22 @@ class GameScene extends Phaser.Scene {
             }
         }
     }
+
+    logDiagnostics(time) {
+        if (this.debugLogTimer === undefined) this.debugLogTimer = 0;
+        if (time > this.debugLogTimer) {
+            console.log('%c--- Diagnostic Log ---', 'color: #00ff00; font-weight: bold;');
+            console.log({
+                FPS: Math.round(this.game.loop.actualFps),
+                Enemies: this.chasers ? this.chasers.length : 0,
+                Pickups: this.pickups ? this.pickups.length : 0,
+                Obstacles: this.obstacles ? this.obstacles.length : 0,
+                EventListeners: this.events.eventNames().length,
+                ListenerEvents: this.events.eventNames()
+            });
+            this.debugLogTimer = time + 5000; // Log every 5 seconds
+        }
+    }
     spawnInitialChasers() {
         const initialCount = GAME_CONFIG.CHASERS.SPAWN.INITIAL_COUNT;
         const blockerCount = Math.floor(initialCount / 2);
@@ -1461,6 +1505,7 @@ class GameScene extends Phaser.Scene {
             }
         }
         this.checkCarCollisions();
+        this.logDiagnostics(time);
     }
     checkChaserTilemapCollisions(chaser) {
         if (!this.tilemap || !chaser) return;
@@ -1641,17 +1686,30 @@ class GameScene extends Phaser.Scene {
         this.tilemap.removeKiosk(tileX, tileY);
     }
     showKioskMessage(text, x, y) {
-        const messageText = this.add.text(x, y - 60, text, {
-            fontSize: '20px',
-            fill: '#00FF00',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 4,
-            align: 'center'
-        }).setOrigin(0.5).setDepth(1000).setAlpha(0);
+        // Create text object only if it doesn't exist
+        if (!this.kioskMessageText) {
+            this.kioskMessageText = this.add.text(0, 0, '', {
+                fontSize: '20px',
+                fill: '#00FF00',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                stroke: '#000000',
+                strokeThickness: 4,
+                align: 'center'
+            }).setOrigin(0.5).setDepth(1000).setAlpha(0);
+        }
+
+        // Reuse the text object
+        this.kioskMessageText.setText(text);
+        this.kioskMessageText.setPosition(x, y - 60);
+        this.kioskMessageText.setAlpha(0);
+        this.kioskMessageText.setVisible(true);
+
+        // Stop any existing tweens on this object
+        this.tweens.killTweensOf(this.kioskMessageText);
+
         this.tweens.add({
-            targets: messageText,
+            targets: this.kioskMessageText,
             alpha: 1,
             y: y - 80,
             duration: 300,
@@ -1659,13 +1717,15 @@ class GameScene extends Phaser.Scene {
             onComplete: () => {
                 this.time.delayedCall(2000, () => {
                     this.tweens.add({
-                        targets: messageText,
+                        targets: this.kioskMessageText,
                         alpha: 0,
                         y: y - 100,
                         duration: 500,
                         ease: 'Power2',
                         onComplete: () => {
-                            messageText.destroy();
+                            if (this.kioskMessageText) {
+                                this.kioskMessageText.setVisible(false);
+                            }
                         }
                     });
                 });
@@ -2133,11 +2193,28 @@ class GameScene extends Phaser.Scene {
         this.scene.start('ResultScene', resultData);
     }
     shutdown() {
+        // Stop all timers
+        this.time.removeAllEvents();
+
         if (this.game && this.game.events) {
             this.game.events.off('blur', this.handleWindowBlur, this);
             this.game.events.off('focus', this.handleWindowFocus, this);
             this.game.events.off('hidden', this.handleWindowBlur, this);
             this.game.events.off('visible', this.handleWindowFocus, this);
+        }
+
+        // Clean up progression events
+        this.events.off('spawn-reinforcement', this.onSpawnReinforcement, this);
+        this.events.off('enemy-hospitalized', this.onEnemyHospitalized, this);
+        this.events.off('money-multiplier-activated', this.onMoneyMultiplierActivated, this);
+        this.events.off('money-multiplier-deactivated', this.onMoneyMultiplierDeactivated, this);
+
+        this.events.off('shutdown', this.shutdown, this);
+
+        // Destoy Kiosk Text
+        if (this.kioskMessageText) {
+            this.kioskMessageText.destroy();
+            this.kioskMessageText = null;
         }
 
         // Знищуємо нові системи прогресії
@@ -2153,8 +2230,25 @@ class GameScene extends Phaser.Scene {
         if (this.moneyMultiplierController) {
             this.moneyMultiplierController.destroy();
         }
+        if (this.bonusManager && typeof this.bonusManager.destroy === 'function') {
+            this.bonusManager.destroy();
+        }
         if (this.spinnerBonus) {
             this.spinnerBonus.destroy();
+        }
+
+        // Clean up entities manually if needed to be sure
+        if (this.chasers) {
+            this.chasers.forEach(chaser => chaser.destroy());
+            this.chasers = [];
+        }
+        if (this.pickups) {
+            this.pickups.forEach(pickup => pickup.destroy());
+            this.pickups = [];
+        }
+        if (this.obstacles) {
+            this.obstacles.forEach(obstacle => obstacle.destroy());
+            this.obstacles = [];
         }
     }
 }

@@ -22,12 +22,12 @@ class Coin extends Phaser.GameObjects.Image {
         }
         this.value = denomination.value;
         this.denomination = denomination;
-        this.rotationSpeed = 0.02 + (this.value / 1000);
+        this.rotationSpeed = 0.02 + Math.min(this.value / 1000, 0.03); // Cap at 0.05
         this.magnetRadius = 60;
         this.magnetSpeed = 300;
         this.collected = false;
-        this.floatAmplitude = 3 + (this.value / 20);
-        this.floatSpeed = 2 + (this.value / 50);
+        this.floatAmplitude = 3 + Math.min(this.value / 100, 5); // Cap at 8
+        this.floatSpeed = 2 + Math.min(this.value / 200, 3); // Cap at 5
         this.floatTime = Math.random() * Math.PI * 2;
         this.startY = y;
     }

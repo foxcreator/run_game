@@ -24,16 +24,24 @@ class BonusManager {
 
     setupInput() {
         const bonusConfig = GAME_CONFIG.BONUSES;
+        this.keyHandlers = {};
+
+        // Helper to bind and store handler
+        const addHandler = (key, type) => {
+            const handler = () => this.activateBonus(type);
+            this.keyHandlers[key] = handler;
+            this.scene.input.keyboard.on(`keydown-${key}`, handler);
+        };
 
         // Map keys
-        this.scene.input.keyboard.on('keydown-ONE', () => this.activateBonus('SPINNER'));
-        this.scene.input.keyboard.on('keydown-TWO', () => this.activateBonus('MAGNET'));
-        this.scene.input.keyboard.on('keydown-THREE', () => this.activateBonus('GAS'));
-        this.scene.input.keyboard.on('keydown-FOUR', () => this.activateBonus('DEPUTY'));
-        this.scene.input.keyboard.on('keydown-FIVE', () => this.activateBonus('COFFEE'));
-        this.scene.input.keyboard.on('keydown-SIX', () => this.activateBonus('SALO'));
-        this.scene.input.keyboard.on('keydown-SEVEN', () => this.activateBonus('ARMOR'));
-        this.scene.input.keyboard.on('keydown-EIGHT', () => this.activateBonus('MAGNATE'));
+        addHandler('ONE', 'SPINNER');
+        addHandler('TWO', 'MAGNET');
+        addHandler('THREE', 'GAS');
+        addHandler('FOUR', 'DEPUTY');
+        addHandler('FIVE', 'COFFEE');
+        addHandler('SIX', 'SALO');
+        addHandler('SEVEN', 'ARMOR');
+        addHandler('EIGHT', 'MAGNATE');
     }
 
     getBonusCount(type) {
@@ -472,6 +480,41 @@ class BonusManager {
 
     isInfiniteStamina() {
         return this.activeBonuses.COFFEE.active;
+    }
+
+    destroy() {
+        // Remove input listeners
+        if (this.keyHandlers && this.scene && this.scene.input && this.scene.input.keyboard) {
+            for (const [key, handler] of Object.entries(this.keyHandlers)) {
+                this.scene.input.keyboard.off(`keydown-${key}`, handler);
+            }
+        }
+        this.keyHandlers = {};
+
+        // Destroy visual objects
+        if (this.activeBonuses.MAGNET.object) {
+            this.activeBonuses.MAGNET.object.destroy();
+        }
+
+        if (this.activeBonuses.ARMOR.object) {
+            this.activeBonuses.ARMOR.object.destroy();
+        }
+
+        // Destroy gas clouds
+        if (this.activeBonuses.GAS.clouds) {
+            this.activeBonuses.GAS.clouds.forEach(cloudData => {
+                if (cloudData.sprite) cloudData.sprite.destroy();
+            });
+            this.activeBonuses.GAS.clouds = [];
+        }
+
+        // Destroy salo lures
+        if (this.activeBonuses.SALO.lures) {
+            this.activeBonuses.SALO.lures.forEach(lureData => {
+                if (lureData.sprite) lureData.sprite.destroy();
+            });
+            this.activeBonuses.SALO.lures = [];
+        }
     }
 }
 
