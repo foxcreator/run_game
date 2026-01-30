@@ -6,13 +6,19 @@ class ShopScene extends Phaser.Scene {
         super({ key: 'ShopScene' });
     }
 
+    init(data) {
+        this.returnScene = data.returnScene || 'MenuScene';
+        this.isOverlay = data.isOverlay || false;
+    }
+
     create() {
         this.saveSystem = new SaveSystem();
         this.bankMoney = this.saveSystem.getBankedMoney();
         const { width, height } = this.cameras.main;
 
         // Background
-        this.add.rectangle(0, 0, width, height, 0x1a1a1a).setOrigin(0);
+        const bgAlpha = this.isOverlay ? 0.9 : 1;
+        this.add.rectangle(0, 0, width, height, 0x1a1a1a, bgAlpha).setOrigin(0);
 
         // Header
         this.add.text(width / 2, 60, 'МАГАЗИН', {
@@ -66,7 +72,14 @@ class ShopScene extends Phaser.Scene {
             fill: '#ffffff'
         }).setOrigin(0.5);
 
-        const goBack = () => this.scene.start('MenuScene');
+        const goBack = () => {
+            if (this.returnScene === 'GameScene') {
+                this.scene.stop();
+                this.scene.resume('GameScene');
+            } else {
+                this.scene.start(this.returnScene);
+            }
+        };
 
         closeBg.on('pointerdown', goBack);
         closeBg.on('pointerover', () => closeBg.setFillStyle(0x666666));

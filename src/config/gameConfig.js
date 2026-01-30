@@ -288,7 +288,7 @@ export const GAME_CONFIG = {
 
     // Система зростання складності (Enemy Reinforcements)
     DIFFICULTY: {
-        REINFORCEMENT_INTERVAL: 150000,     // Інтервал підкріплення (мс) - 2.5 хвилини
+        REINFORCEMENT_INTERVAL: 90000,      // Інтервал підкріплення (мс) - 1.5 хвилини
         ENEMIES_PER_WAVE: 2,                // Кількість нових ворогів за хвилю
         MAX_ENEMIES: 20,                    // Максимальна кількість ворогів (soft cap)
         MESSAGES: [
@@ -313,7 +313,7 @@ export const GAME_CONFIG = {
 
     // Прогресія економіки (Money Scaling)
     MONEY_PROGRESSION: {
-        SCALING_INTERVAL: 150000,           // Інтервал збільшення шансів (мс) - 2.5 хвилини
+        SCALING_INTERVAL: 90000,            // Інтервал збільшення шансів (мс) - 1.5 хвилини
         WEIGHT_INCREMENT: 1,                // Приріст ваги кожен інтервал
         MAX_WEIGHT: 5,                      // Максимальна вага для номіналу
         // Початкові ваги для номіналів (використовується weight table)
@@ -326,7 +326,8 @@ export const GAME_CONFIG = {
         // Нові номінали (розблоковуються після досягнення max weight)
         NEW_DENOMINATIONS: [
             { value: 200, initialWeight: 1, color: 0x9370db, texture: 'coin_200' },
-            { value: 500, initialWeight: 1, color: 0x4169e1, texture: 'coin_500' }
+            { value: 500, initialWeight: 1, color: 0x4169e1, texture: 'coin_500' },
+            { value: 1000, initialWeight: 1, color: 0x00bfff, texture: 'coin_1000' }
         ],
         MESSAGES: {
             WEIGHT_INCREASE: [
@@ -344,7 +345,7 @@ export const GAME_CONFIG = {
 
     // Time-based Money Multiplier Pickup (x5)
     MONEY_MULTIPLIER: {
-        SPAWN_INTERVAL: 300000,             // Інтервал появи (мс) - 5 хвилин
+        SPAWN_INTERVAL: 150000,             // Інтервал появи (мс) - 2.5 хвилини
         LIFETIME: 30000,                    // Час життя пікапа (мс) - 30 секунд
         MULTIPLIER: 5,                      // Множник грошей
         DURATION: 30000,                    // Тривалість ефекту (мс) - 30 секунд

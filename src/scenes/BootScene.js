@@ -45,6 +45,9 @@ class BootScene extends Phaser.Scene {
         this.load.image('coin_20', './src/assets/textures/pickups/20_uah.png');
         this.load.image('coin_50', './src/assets/textures/pickups/50_uah.png');
         this.load.image('coin_100', './src/assets/textures/pickups/100_uah.png');
+        this.load.image('coin_200', './src/assets/textures/pickups/200_uah.png');
+        this.load.image('coin_500', './src/assets/textures/pickups/500_uah.png');
+        this.load.image('coin_1000', './src/assets/textures/pickups/1000_uah.png');
         this.load.image('scooter', './src/assets/textures/pickups/scooter.png');
         this.load.image('cloud', './src/assets/textures/pickups/cloud.png');
         this.load.image('exchange', './src/assets/textures/exchange.png');

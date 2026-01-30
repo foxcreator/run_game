@@ -129,9 +129,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             return;
         }
         const shouldPlayRunning = this.isMoving &&
-                                  !this.isFalling &&
-                                  !this.isFrozen &&
-                                  !this.isSliding;
+            !this.isFalling &&
+            !this.isFrozen &&
+            !this.isSliding;
         const isRunningPlaying = this.audioManager.isSoundPlaying('running');
         if (shouldPlayRunning && !isRunningPlaying) {
             this.audioManager.playSound('running', true);
@@ -220,10 +220,18 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         }
     }
     calculateSpeedMultiplier() {
-        if (this.exhausted) {
+        let baseMultiplier = 1.0;
+
+        // If exhausted AND no active buffs, apply exhausted penalty
+        if (this.exhausted && this.speedBuffs.length === 0) {
             return this.exhaustedSpeedMultiplier;
         }
-        let baseMultiplier = 1.0;
+
+        // If exhausted but has buffs, start from exhausted base
+        if (this.exhausted) {
+            baseMultiplier = this.exhaustedSpeedMultiplier;
+        }
+
         if (this.speedDebuffs.length > 0) {
             let minDebuff = 1.0;
             for (const debuff of this.speedDebuffs) {
@@ -231,6 +239,7 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             }
             baseMultiplier *= minDebuff;
         }
+
         if (this.speedBuffs.length > 0) {
             let totalBuff = 0;
             for (const buff of this.speedBuffs) {
@@ -238,6 +247,7 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             }
             baseMultiplier += totalBuff;
         }
+
         return baseMultiplier;
     }
     updateControlDebuffs(delta) {
@@ -372,9 +382,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     }
     canDash() {
         return !this.dashActive &&
-               this.dashCooldownTimer <= 0 &&
-               this.stamina >= this.dashStaminaCost &&
-               !this.exhausted;
+            this.dashCooldownTimer <= 0 &&
+            this.stamina >= this.dashStaminaCost &&
+            !this.exhausted;
     }
     performDash(directionX, directionY) {
         if (directionX === 0 && directionY === 0) return;
@@ -391,9 +401,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     }
     canSlide() {
         return !this.slideActive &&
-               this.slideCooldownTimer <= 0 &&
-               !this.isFrozen &&
-               !this.exhausted;
+            this.slideCooldownTimer <= 0 &&
+            !this.isFrozen &&
+            !this.exhausted;
     }
     performSlide(directionX, directionY) {
         if (directionX === 0 && directionY === 0) return;
