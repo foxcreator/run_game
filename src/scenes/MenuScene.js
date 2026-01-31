@@ -1,6 +1,7 @@
 import { createStyledButton } from '../utils/ButtonHelper.js';
 import AudioManager from '../systems/AudioManager.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
+import apiClient from '../systems/ApiClient.js';
 class MenuScene extends Phaser.Scene {
     constructor() {
         super({ key: 'MenuScene' });
@@ -33,6 +34,10 @@ class MenuScene extends Phaser.Scene {
             strokeThickness: 3,
             alpha: 0.7
         }).setDepth(1000);
+
+        // === ЛІДЕРБОРД (зліва під версією) ===
+        this.createLeaderboard(10, 40);
+
         const menuBoxWidth = 400;
         const menuBoxHeight = 320;
         const menuBoxX = width / 2;
@@ -831,6 +836,134 @@ class MenuScene extends Phaser.Scene {
                 closePopup();
             }
         });
+    }
+
+    /**
+     * Створює панель лідерборду зліва
+     */
+    createLeaderboard(x, y) {
+        const panelWidth = 220;
+        const panelHeight = 320;
+
+        // Напівпрозорий фон
+        const bg = this.add.rectangle(x + panelWidth / 2, y + panelHeight / 2, panelWidth, panelHeight, 0x000000, 0.6)
+            .setStrokeStyle(2, 0xFFD700, 0.8)
+            .setDepth(5);
+
+        // Заголовок
+        this.add.text(x + panelWidth / 2, y + 15, '🏆 ТОП-10', {
+            fontSize: '18px',
+            fill: '#FFD700',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5, 0).setDepth(6);
+
+        // Контейнер для рядків лідерборду
+        this.leaderboardTexts = [];
+
+        // Текст завантаження
+        this.leaderboardLoading = this.add.text(x + panelWidth / 2, y + panelHeight / 2, 'Завантаження...', {
+            fontSize: '14px',
+            fill: '#888888',
+            fontFamily: 'Arial, sans-serif'
+        }).setOrigin(0.5).setDepth(6);
+
+        // Завантажуємо дані
+        this.loadLeaderboard(x, y + 45, panelWidth);
+
+        // WebSocket підписка на оновлення
+        apiClient.onLeaderboardUpdate = (data) => {
+            this.loadLeaderboard(x, y + 45, panelWidth);
+        };
+    }
+
+    /**
+     * Завантажує дані лідерборду з сервера
+     */
+    async loadLeaderboard(x, startY, panelWidth) {
+        try {
+            const leaderboard = await apiClient.getLeaderboard(10);
+
+            // Ховаємо "Завантаження..."
+            if (this.leaderboardLoading) {
+                this.leaderboardLoading.setVisible(false);
+            }
+
+            // Очищуємо попередні тексти
+            this.leaderboardTexts.forEach(t => t.destroy());
+            this.leaderboardTexts = [];
+
+            if (!leaderboard || leaderboard.length === 0) {
+                const emptyText = this.add.text(x + panelWidth / 2, startY + 80, 'Поки нікого 🤷', {
+                    fontSize: '14px',
+                    fill: '#888888',
+                    fontFamily: 'Arial, sans-serif'
+                }).setOrigin(0.5).setDepth(6);
+                this.leaderboardTexts.push(emptyText);
+                return;
+            }
+
+            // Відображаємо записи
+            const lineHeight = 25;
+            leaderboard.forEach((entry, index) => {
+                const yPos = startY + index * lineHeight;
+
+                // Медалі для топ-3
+                let medal = '';
+                if (index === 0) medal = '🥇';
+                else if (index === 1) medal = '🥈';
+                else if (index === 2) medal = '🥉';
+                else medal = `${index + 1}.`;
+
+                // Форматуємо час
+                const timeStr = this.formatTime(entry.survivalTime);
+
+                // Обрізаємо username якщо довгий
+                const maxNameLength = 10;
+                const displayName = entry.username.length > maxNameLength
+                    ? entry.username.slice(0, maxNameLength) + '…'
+                    : entry.username;
+
+                const rowText = this.add.text(x + 10, yPos, `${medal} ${displayName}`, {
+                    fontSize: '13px',
+                    fill: index < 3 ? '#FFD700' : '#FFFFFF',
+                    fontFamily: 'Arial, sans-serif',
+                    stroke: '#000000',
+                    strokeThickness: 1
+                }).setDepth(6);
+
+                const timeText = this.add.text(x + panelWidth - 10, yPos, timeStr, {
+                    fontSize: '13px',
+                    fill: '#90EE90',
+                    fontFamily: 'Arial, sans-serif',
+                    stroke: '#000000',
+                    strokeThickness: 1
+                }).setOrigin(1, 0).setDepth(6);
+
+                this.leaderboardTexts.push(rowText, timeText);
+            });
+
+        } catch (error) {
+            console.error('Failed to load leaderboard:', error);
+            if (this.leaderboardLoading) {
+                this.leaderboardLoading.setText('Помилка');
+            }
+        }
+    }
+
+    /**
+     * Форматує секунди в читабельний час
+     */
+    formatTime(seconds) {
+        if (!seconds) return '0с';
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        if (mins > 0) {
+            return `${mins}хв ${secs}с`;
+        }
+        return `${secs}с`;
     }
 }
 export default MenuScene;

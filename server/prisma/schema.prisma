@@ -1,0 +1,51 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Player {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique @db.VarChar(50)
+  sessionToken String?   @db.VarChar(64)
+  createdAt    DateTime  @default(now())
+  lastSeen     DateTime  @updatedAt
+  
+  data         PlayerData?
+  stats        PlayerStats?
+  scores       LeaderboardEntry[]
+}
+
+model PlayerData {
+  playerId   Int    @id
+  bankMoney  Int    @default(0)
+  bonuses    Json   @default("{}")
+  
+  player     Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+}
+
+model PlayerStats {
+  playerId         Int    @id
+  totalGames       Int    @default(0)
+  totalPlaytime    Int    @default(0)
+  totalMoneyEarned Int    @default(0)
+  bestSurvivalTime Int    @default(0)
+  
+  player           Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+}
+
+model LeaderboardEntry {
+  id           Int      @id @default(autoincrement())
+  playerId     Int
+  score        Int
+  survivalTime Int
+  createdAt    DateTime @default(now())
+  
+  player       Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  
+  @@index([survivalTime(sort: Desc)])
+  @@index([createdAt])
+}

@@ -1,4 +1,5 @@
 import BootScene from './scenes/BootScene.js';
+import LoginScene from './scenes/LoginScene.js';
 import MenuScene from './scenes/MenuScene.js';
 import GameScene from './scenes/GameScene.js';
 import ResultScene from './scenes/ResultScene.js';
@@ -40,7 +41,7 @@ const config = {
         noAudio: false,
         context: false // Не створювати контекст одразу
     },
-    scene: [BootScene, MenuScene, GameScene, ResultScene, ShopScene]
+    scene: [BootScene, LoginScene, MenuScene, GameScene, ResultScene, ShopScene]
 };
 const game = new Phaser.Game(config);
 window.addEventListener('resize', () => {

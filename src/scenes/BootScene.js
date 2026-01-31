@@ -160,7 +160,7 @@ class BootScene extends Phaser.Scene {
             loader.style.display = 'none';
         }
 
-        this.scene.start('MenuScene');
+        this.scene.start('LoginScene');
     }
 
     update() {
