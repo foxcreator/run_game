@@ -1,0 +1,6 @@
+# Копіюй як terraform.tfvars
+hcloud_token   = "your-hetzner-api-token"
+ssh_public_key = "ssh-ed25519 AAAA... your-key"
+server_name    = "busification-run"
+server_type    = "cx22"
+location       = "nbg1"

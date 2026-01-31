@@ -1,0 +1,15 @@
+module.exports = {
+  apps: [{
+    name: 'busification-api',
+    script: 'src/index.js',
+    cwd: '{{ app_dir }}/server',
+    instances: 1,
+    autorestart: true,
+    watch: false,
+    max_memory_restart: '500M',
+    env: {
+      NODE_ENV: 'production',
+      PORT: 3000
+    }
+  }]
+};

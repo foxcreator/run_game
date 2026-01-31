@@ -1,0 +1,12 @@
+---
+# Повне налаштування сервера з нуля
+- name: Setup Busification Run Server
+  hosts: all
+  become: true
+  
+  roles:
+    - common
+    - nginx
+    - nodejs
+    - mysql
+    - app

@@ -1,0 +1,15 @@
+# Копіюй як hosts.yml
+all:
+  hosts:
+    busification:
+      ansible_host: YOUR_SERVER_IP
+      ansible_user: root
+      ansible_python_interpreter: /usr/bin/python3
+  vars:
+    app_name: busification-run
+    app_dir: /opt/busification-run
+    app_domain: your-domain.com
+    deploy_user: deploy
+    mysql_root_password: "CHANGE_ME"
+    mysql_database: game
+    admin_password: "CHANGE_ME"
