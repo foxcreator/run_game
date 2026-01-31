@@ -2183,6 +2183,14 @@ class GameScene extends Phaser.Scene {
         }
         const currentBankedMoney = this.saveSystem.getBankedMoney();
         const moneyAddedThisGame = currentBankedMoney - (this.initialBankedMoney || 0);
+
+        // Відправляємо результат гри на сервер
+        this.saveSystem.reportGameEnd(
+            moneyAddedThisGame,            // score
+            Math.floor(this.timeSurvived), // survivalTime в секундах
+            moneyAddedThisGame             // moneyEarned
+        );
+
         const resultData = {
             currentBankedMoney: currentBankedMoney,
             moneyAddedThisGame: moneyAddedThisGame,

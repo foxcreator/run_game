@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Busification Run - Адмін-панель</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="login-screen" class="screen active">
+        <div class="login-box">
+            <h1>🎮 Busification Run</h1>
+            <h2>Адмін-панель</h2>
+            <input type="password" id="admin-password" placeholder="Пароль адміністратора">
+            <button id="login-btn">Увійти</button>
+            <div id="login-error" class="error"></div>
+        </div>
+    </div>
+
+    <div id="dashboard-screen" class="screen">
+        <header>
+            <h1>🎮 Busification Run - Адмін</h1>
+            <button id="logout-btn">Вийти</button>
+        </header>
+
+        <main>
+            <section class="stats-cards">
+                <div class="card">
+                    <h3>👥 Гравців</h3>
+                    <div id="stat-players" class="stat-value">-</div>
+                </div>
+                <div class="card">
+                    <h3>🎮 Всього ігор</h3>
+                    <div id="stat-games" class="stat-value">-</div>
+                </div>
+                <div class="card">
+                    <h3>⏱️ Час гри</h3>
+                    <div id="stat-playtime" class="stat-value">-</div>
+                </div>
+                <div class="card">
+                    <h3>🏆 Топ гравець</h3>
+                    <div id="stat-top-player" class="stat-value">-</div>
+                </div>
+            </section>
+
+            <section class="players-section">
+                <h2>📋 Список гравців</h2>
+                <table id="players-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Банк</th>
+                            <th>Ігор</th>
+                            <th>Час гри</th>
+                            <th>Найкращий час</th>
+                            <th>Остання активність</th>
+                        </tr>
+                    </thead>
+                    <tbody id="players-tbody">
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="leaderboard-section">
+                <h2>🏆 Топ-10 лідерборду</h2>
+                <table id="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Username</th>
+                            <th>Час виживання</th>
+                            <th>Рахунок</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-tbody">
+                    </tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

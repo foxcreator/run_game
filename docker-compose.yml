@@ -1,13 +1,49 @@
-version: '3.8'
-
 services:
   web:
-    build: .
+    image: nginx:alpine
     ports:
       - "8080:80"
-    # Volume для розробки (зміни відображаються одразу)
-    # Якщо потрібен read-only режим, змініть на :ro
     volumes:
-      - .:/usr/share/nginx/html
-    container_name: busification-run
+      - .:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    container_name: busification-run-web
     restart: unless-stopped
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: ./server
+      dockerfile: ../Dockerfile.api
+    environment:
+      - DATABASE_URL=mysql://root:password@db:3306/game
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - NODE_ENV=development
+      - CORS_ORIGIN=*
+    ports:
+      - "3000:3000"
+    container_name: busification-run-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=game
+    volumes:
+      - mysql_data:/var/lib/mysql
+    # ports:
+    #   - "3306:3306"  # Закоментовано — порт доступний тільки всередині Docker мережі
+    container_name: busification-run-db
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_data:
