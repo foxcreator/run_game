@@ -1,0 +1,37 @@
+---
+# Role: common — базові пакети та deploy user
+
+- name: Install essential packages
+  apt:
+    name:
+      - git
+      - curl
+      - zip
+      - unzip
+      - htop
+      - vim
+      - acl
+    state: present
+
+- name: Create deploy user
+  user:
+    name: "{{ deploy_user }}"
+    shell: /bin/bash
+    groups: sudo
+    append: yes
+    create_home: yes
+
+- name: Allow deploy user passwordless sudo
+  lineinfile:
+    path: /etc/sudoers.d/{{ deploy_user }}
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD:ALL"
+    create: yes
+    mode: '0440'
+    validate: 'visudo -cf %s'
+
+- name: Add SSH key for deploy user
+  authorized_key:
+    user: "{{ deploy_user }}"
+    key: "{{ lookup('file', '../hetzner_key.pub') }}"
+    state: present
+  ignore_errors: yes

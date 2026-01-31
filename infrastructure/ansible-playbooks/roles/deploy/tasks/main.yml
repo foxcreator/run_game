@@ -1,0 +1,89 @@
+---
+# Role: deploy — підготовка директорій + деплой коду
+
+- name: Create site directories
+  file:
+    path: "{{ item.root }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: '0755'
+  loop: "{{ sites }}"
+
+- name: Clone repository
+  git:
+    repo: "{{ app_repo }}"
+    dest: "{{ item.root }}"
+    version: "{{ app_branch }}"
+    force: yes
+  become_user: "{{ deploy_user }}"
+  loop: "{{ sites }}"
+
+- name: Install server npm dependencies
+  npm:
+    path: "{{ item.root }}/server"
+    state: present
+  become_user: "{{ deploy_user }}"
+  loop: "{{ sites }}"
+
+- name: Create .env file
+  copy:
+    dest: "{{ item.root }}/server/.env"
+    content: |
+      DATABASE_URL=mysql://{{ mysql_user }}:{{ mysql_password }}@localhost:3306/{{ mysql_database }}
+      ADMIN_PASSWORD={{ admin_password }}
+      NODE_ENV=production
+      CORS_ORIGIN=https://{{ item.domain }}
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: '0600'
+  loop: "{{ sites }}"
+
+- name: Run Prisma generate
+  command: npx prisma generate
+  args:
+    chdir: "{{ item.root }}/server"
+  become_user: "{{ deploy_user }}"
+  loop: "{{ sites }}"
+
+- name: Run Prisma migrations
+  command: npx prisma db push
+  args:
+    chdir: "{{ item.root }}/server"
+  become_user: "{{ deploy_user }}"
+  loop: "{{ sites }}"
+
+- name: Create PM2 ecosystem config
+  copy:
+    dest: "{{ item.root }}/server/ecosystem.config.js"
+    content: |
+      module.exports = {
+        apps: [{
+          name: '{{ item.name }}-api',
+          script: 'src/index.js',
+          cwd: '{{ item.root }}/server',
+          instances: 1,
+          autorestart: true,
+          watch: false,
+          max_memory_restart: '500M',
+          env: {
+            NODE_ENV: 'production',
+            PORT: {{ item.api_port }}
+          }
+        }]
+      };
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+  loop: "{{ sites }}"
+
+- name: Start API with PM2
+  command: pm2 start ecosystem.config.js
+  args:
+    chdir: "{{ item.root }}/server"
+  become_user: "{{ deploy_user }}"
+  loop: "{{ sites }}"
+  ignore_errors: yes
+
+- name: Save PM2 processes
+  command: pm2 save
+  become_user: "{{ deploy_user }}"

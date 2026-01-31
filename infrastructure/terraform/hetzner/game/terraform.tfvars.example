@@ -1,0 +1,40 @@
+# Копіюй як terraform.tfvars
+
+hcloud_token   = "your-hetzner-api-token"
+ssh_public_key = "ssh-ed25519 AAAA... your-key"
+project_name   = "game"
+
+servers = {
+  busification = {
+    server_type = "cx22"       # 2 vCPU, 4GB RAM
+    image       = "ubuntu-24.04"
+    location    = "nbg1"       # Nuremberg
+  }
+}
+
+firewall_rules = [
+  {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "22"
+    source_ips = ["0.0.0.0/0", "::/0"]
+  },
+  {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "80"
+    source_ips = ["0.0.0.0/0", "::/0"]
+  },
+  {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "443"
+    source_ips = ["0.0.0.0/0", "::/0"]
+  },
+  {
+    direction  = "in"
+    protocol   = "icmp"
+    port       = ""
+    source_ips = ["0.0.0.0/0", "::/0"]
+  }
+]

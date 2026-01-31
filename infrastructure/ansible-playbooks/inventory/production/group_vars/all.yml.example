@@ -1,0 +1,31 @@
+# Копіюй як all.yml та заповни значення
+
+---
+# Deploy user
+deploy_user: deploy
+
+# Sites configuration
+sites:
+  - name: busification
+    domain: game.yourdomain.com
+    root: /var/www/busification-run
+    api_port: 3000
+
+# MySQL
+mysql_root_password: "CHANGE_ME_STRONG_PASSWORD"
+mysql_database: game
+mysql_user: game_user
+mysql_password: "CHANGE_ME_APP_PASSWORD"
+
+# Admin
+admin_password: "CHANGE_ME_ADMIN_PASSWORD"
+
+# App
+app_repo: https://github.com/foxcreator/run_game.git
+app_branch: main
+
+# Node.js
+nodejs_version: "20"
+
+# SSH
+ssh_port: 22
