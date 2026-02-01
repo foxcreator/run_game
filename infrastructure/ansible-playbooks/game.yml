@@ -3,6 +3,9 @@
   hosts: all
   become: true
   
+  vars:
+    admin_email: "admin@run-game.fun"
+
   vars_files:
     - inventory/production/vars/default.yml
 
@@ -30,6 +33,7 @@
   #   - runner_state: "absent"
   vars:
     reinstall_runner: true
+    runner_state: "started"
   
   vars_files:
     - inventory/production/vars/runner-game.yaml
