@@ -1,7 +1,2 @@
 [game]
-busification ansible_host=46.62.155.14
-
-[game:vars]
-ansible_user=root
-ansible_python_interpreter=/usr/bin/python3
-ansible_ssh_private_key_file=../../terraform/hetzner/web/files/hetzner_game_key
+46.62.155.14 ansible_ssh_user=root ansible_ssh_private_key_file=./hetzner_key

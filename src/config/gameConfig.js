@@ -1,7 +1,7 @@
 // Конфігурація гри
 export const GAME_CONFIG = {
     // Версія гри
-    VERSION: 'beta v0.2.1',
+    VERSION: 'beta v0.2.2',
 
     // Посилання на донат
     DONATE_LINK: 'https://send.monobank.ua/jar/5o7UpNzoQB?utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAZXh0bgNhZW0CMTEAc3J0YwZhcHBfaWQMMjU2MjgxMDQwNTU4AAGnmSvkrtywzZGSOS70RRLL0pIZRAvGuo34c4WhJdtAQYXBN7Bus1ddv-Nu7PA_aem_-dCYDjIuSfJy7Z4xJ55piQ',

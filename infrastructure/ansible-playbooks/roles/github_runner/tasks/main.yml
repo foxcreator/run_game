@@ -1,5 +1,5 @@
 ---
-# Role: github-runner — Встановлення та налаштування Self-Hosted Runner
+# Role: github-runner — Підготовка користувача runner (Prerequisite for monolithprojects module)
 
 - name: Create runner user
   user:
@@ -17,62 +17,10 @@
     mode: '0440'
     validate: 'visudo -cf %s'
 
-- name: Create runner directory
-  file:
-    path: /home/runner/actions-runner
-    state: directory
-    owner: runner
-    group: runner
-    mode: '0755'
-
-- name: Install runner dependencies
+- name: Install dependencies (required by role)
   apt:
     name:
-      - libdigest-sha-perl
-      - libicu-dev
-      - libssl-dev
+      - git
+      - curl
+      - jq
     state: present
-
-- name: Download GitHub Runner
-  get_url:
-    url: https://github.com/actions/runner/releases/download/v2.313.0/actions-runner-linux-x64-2.313.0.tar.gz
-    dest: /home/runner/actions-runner/actions-runner-linux.tar.gz
-    owner: runner
-    group: runner
-    mode: '0644'
-
-- name: Extract GitHub Runner
-  unarchive:
-    src: /home/runner/actions-runner/actions-runner-linux.tar.gz
-    dest: /home/runner/actions-runner
-    remote_src: yes
-    owner: runner
-    group: runner
-    creates: /home/runner/actions-runner/config.sh
-
-- name: Check if runner is already configured
-  stat:
-    path: /home/runner/actions-runner/.runner
-  register: runner_configured
-
-- name: Configure GitHub Runner
-  command:
-    cmd: ./config.sh --url https://github.com/foxcreator/run_game --token {{ runner_token }} --unattended --replace
-    chdir: /home/runner/actions-runner
-  become_user: runner
-  when: not runner_configured.stat.exists and runner_token is defined
-
-- name: Install Runner Service
-  command:
-    cmd: ./svc.sh install
-    chdir: /home/runner/actions-runner
-  become: yes
-  when: not runner_configured.stat.exists and runner_token is defined
-  ignore_errors: yes # Service might be already installed
-
-- name: Start Runner Service
-  command:
-    cmd: ./svc.sh start
-    chdir: /home/runner/actions-runner
-  become: yes
-  ignore_errors: yes # Might be already running

@@ -10,6 +10,15 @@
     mode: '0755'
   loop: "{{ sites }}"
 
+- name: Create server directory
+  file:
+    path: "{{ item.root }}/server"
+    state: directory
+    owner: runner
+    group: runner
+    mode: '0755'
+  loop: "{{ sites }}"
+
 # При self-hosted runner, 'gti clone' робить сам runner через actions/checkout
 # Тому тут ми лише готуємо конфіги
 

@@ -16,5 +16,5 @@
 - name: Add SSH key for root
   authorized_key:
     user: root
-    key: "{{ lookup('file', '../../terraform/hetzner/web/files/hetzner_game_key.pub') }}"
+    key: "{{ lookup('file', '../../hetzner_key.pub') }}"
     state: present
