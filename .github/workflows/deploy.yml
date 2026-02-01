@@ -3,7 +3,7 @@ name: Deploy to Server
 on:
   push:
     branches:
-      - "fix/ci-workflow"
+      - "main"
   workflow_dispatch:
 
 jobs:
