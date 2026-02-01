@@ -38,10 +38,10 @@
 
 - name: Ensure PM2 ecosystem config exists (template)
   copy:
-    dest: "{{ item.root }}/server/ecosystem.config.js"
+    dest: "{{ item.root }}/server/ecosystem.config.cjs"
     content: |
       module.exports = {
-        apps: [{
+        apps : [{
           name: '{{ item.name }}-api',
           script: 'src/index.js',
           cwd: '{{ item.root }}/server',
