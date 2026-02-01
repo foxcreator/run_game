@@ -3,7 +3,7 @@ name: Deploy to Server
 on:
   push:
     branches:
-      - main
+      - "fix/ci-workflow"
   workflow_dispatch:
 
 jobs:
@@ -14,23 +14,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install server dependencies
+      - name: Setup Environment for Migrations
         run: |
-          cd server
-          npm ci --production
+          # Copy .env from the live directory to the runner's workspace so Prisma can see it
+          cp /var/www/busification-run/server/.env server/.env
 
-      - name: Run migrations
+      - name: Run Migrations
         run: |
           cd server
+          # Install dependencies needed for migration (prisma)
+          npm ci
           npx prisma db push
 
-      - name: Restart API
-        # Using passwordless sudo for service reload if needed, or just pm2
-        # Runner user has pm2 access
+      - name: Deploy Code
         run: |
-          cd server
+          # Copy new code to production directory (excluding node_modules to be safe/clean)
+          rsync -av --exclude='node_modules' --exclude='.git' ./ /var/www/busification-run/
+      
+      - name: Install Production Dependencies & Restart
+        run: |
+          cd /var/www/busification-run/server
+          npm ci --production
           pm2 restart busification-api || pm2 start ecosystem.config.js
           pm2 save
-          
+
       - name: Notify
         run: echo "✅ Deploy completed!"
