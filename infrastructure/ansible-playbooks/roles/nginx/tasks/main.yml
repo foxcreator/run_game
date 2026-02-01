@@ -39,3 +39,19 @@
     name: nginx
     state: started
     enabled: yes
+
+- name: Obtain SSL certificates
+  command: >
+    certbot --nginx 
+    -d {{ item.domain }} 
+    -m {{ admin_email }} 
+    --agree-tos 
+    --non-interactive
+    --redirect
+  loop: "{{ sites }}"
+  register: certbot_result
+  changed_when: "'Congratulations' in certbot_result.stdout"
+  failed_when: 
+    - certbot_result.rc != 0
+    - "'Certificate not yet due for renewal' not in certbot_result.stdout" # Ignore if already exists
+  notify: reload nginx

@@ -3,6 +3,9 @@
   hosts: all
   become: true
   
+  vars:
+    admin_email: "admin@run-game.fun"
+
   vars_files:
     - inventory/production/vars/default.yml
 
