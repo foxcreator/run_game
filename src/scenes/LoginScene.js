@@ -250,8 +250,8 @@ class LoginScene extends Phaser.Scene {
             return;
         }
 
-        if (!/^[a-zA-Z0-9_\u0400-\u04FF]+$/.test(username)) {
-            this.showError('❌ Тільки літери, цифри та _');
+        if (!/^[a-zA-Z0-9_\u0400-\u04FF -]+$/.test(username)) {
+            this.showError('❌ Тільки літери, цифри, _ та -');
             return;
         }
 

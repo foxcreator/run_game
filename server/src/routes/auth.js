@@ -18,9 +18,9 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ error: 'Username must be 2-50 characters' });
         }
 
-        // Перевірка на допустимі символи
-        if (!/^[a-zA-Z0-9_\u0400-\u04FF]+$/.test(trimmedUsername)) {
-            return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores' });
+        // Перевірка на допустимі символи (літери, цифри, _, -, пробіл)
+        if (!/^[a-zA-Z0-9_\u0400-\u04FF -]+$/.test(trimmedUsername)) {
+            return res.status(400).json({ error: 'Username can only contain letters, numbers, _, - and spaces' });
         }
 
         const result = await login(trimmedUsername);
