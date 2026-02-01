@@ -1,0 +1,34 @@
+---
+# Role: github-runner — Підготовка користувача runner
+
+- name: Create runner user
+  user:
+    name: runner
+    shell: /bin/bash
+    groups: sudo
+    append: yes
+    create_home: yes
+
+- name: Allow runner user passwordless sudo for specific commands
+  copy:
+    dest: /etc/sudoers.d/runner
+    content: |
+      runner ALL=(ALL) NOPASSWD: /usr/sbin/service nginx reload, /usr/bin/systemctl reload nginx, /usr/bin/pm2
+    mode: '0440'
+    validate: 'visudo -cf %s'
+
+- name: Create runner directory
+  file:
+    path: /home/runner/actions-runner
+    state: directory
+    owner: runner
+    group: runner
+    mode: '0755'
+
+- name: Install runner dependencies (libdigest-sha-perl, dotnet dependencies)
+  apt:
+    name:
+      - libdigest-sha-perl
+      - libicu-dev
+      - libssl-dev
+    state: present

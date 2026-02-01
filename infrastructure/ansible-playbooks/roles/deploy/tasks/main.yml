@@ -1,30 +1,17 @@
 ---
-# Role: deploy — підготовка директорій + деплой коду
+# Role: deploy — підготовка директорій для runner
 
 - name: Create site directories
   file:
     path: "{{ item.root }}"
     state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
+    owner: runner
+    group: runner
     mode: '0755'
   loop: "{{ sites }}"
 
-- name: Clone repository
-  git:
-    repo: "{{ app_repo }}"
-    dest: "{{ item.root }}"
-    version: "{{ app_branch }}"
-    force: yes
-  become_user: "{{ deploy_user }}"
-  loop: "{{ sites }}"
-
-- name: Install server npm dependencies
-  npm:
-    path: "{{ item.root }}/server"
-    state: present
-  become_user: "{{ deploy_user }}"
-  loop: "{{ sites }}"
+# При self-hosted runner, 'gti clone' робить сам runner через actions/checkout
+# Тому тут ми лише готуємо конфіги
 
 - name: Create .env file
   copy:
@@ -34,26 +21,13 @@
       ADMIN_PASSWORD={{ admin_password }}
       NODE_ENV=production
       CORS_ORIGIN=https://{{ item.domain }}
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
+    owner: runner
+    group: runner
     mode: '0600'
   loop: "{{ sites }}"
+  # .env створюється заздалегідь, або runner може створити його сам з secrets
 
-- name: Run Prisma generate
-  command: npx prisma generate
-  args:
-    chdir: "{{ item.root }}/server"
-  become_user: "{{ deploy_user }}"
-  loop: "{{ sites }}"
-
-- name: Run Prisma migrations
-  command: npx prisma db push
-  args:
-    chdir: "{{ item.root }}/server"
-  become_user: "{{ deploy_user }}"
-  loop: "{{ sites }}"
-
-- name: Create PM2 ecosystem config
+- name: Ensure PM2 ecosystem config exists (template)
   copy:
     dest: "{{ item.root }}/server/ecosystem.config.js"
     content: |
@@ -72,18 +46,9 @@
           }
         }]
       };
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
+    owner: runner
+    group: runner
   loop: "{{ sites }}"
 
-- name: Start API with PM2
-  command: pm2 start ecosystem.config.js
-  args:
-    chdir: "{{ item.root }}/server"
-  become_user: "{{ deploy_user }}"
-  loop: "{{ sites }}"
-  ignore_errors: yes
+# PM2 і Prisma команди буде запускати сам Runner під час CI/CD пайплайну
 
-- name: Save PM2 processes
-  command: pm2 save
-  become_user: "{{ deploy_user }}"

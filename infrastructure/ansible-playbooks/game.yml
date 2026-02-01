@@ -17,4 +17,5 @@
     - nginx
     - nodejs
     - mysql
+    - github_runner
     - deploy
