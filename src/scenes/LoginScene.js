@@ -195,8 +195,8 @@ class LoginScene extends Phaser.Scene {
                 <div id="login-subtitle">📋 РЕЄСТРАЦІЯ УХИЛЯНТА</div>
                 <div id="login-divider"></div>
                 <div id="login-label">Позивний:</div>
-                <input type="text" id="login-input" placeholder="Введіть позивний..." maxlength="50" autocomplete="off">
-                <div id="login-hint">(латиниця, кирилиця, цифри та _)</div>
+                <input type="text" id="login-input" placeholder="Введіть позивний..." autocomplete="off">
+                <div id="login-hint">(латиниця, кирилиця, цифри, _ та -)</div>
                 <button id="login-button">🏃 ТІКАТИ ВІД ОБЛІКУ</button>
                 <div id="login-seal">📍<br>М.П.</div>
                 <div id="login-error"></div>
@@ -272,8 +272,10 @@ class LoginScene extends Phaser.Scene {
                 });
             }
         } catch (error) {
-            console.error('Login error:', error);
-            this.showError('❌ ' + (error.message || 'Помилка входу'));
+            console.error('Login error details:', error);
+            // Show explicit error source if possible
+            const msg = error.message || 'Помилка входу';
+            this.showError('❌ Err: ' + msg);
         }
     }
 
