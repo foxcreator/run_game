@@ -8,26 +8,29 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+    
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.8.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Add Host Key
+      - name: Install server dependencies
         run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
+          cd server
+          npm ci --production
 
-      - name: Deploy with Rsync
+      - name: Run migrations
         run: |
-          rsync -avz --delete \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude 'node_modules/' \
-            --exclude '.DS_Store' \
-            ./ ${{ secrets.USERNAME }}@${{ secrets.HOST }}:${{ secrets.TARGET_DIR }}
+          cd server
+          npx prisma db push
+
+      - name: Restart API
+        # Using passwordless sudo for service reload if needed, or just pm2
+        # Runner user has pm2 access
+        run: |
+          cd server
+          pm2 restart busification-api || pm2 start ecosystem.config.js
+          pm2 save
+          
+      - name: Notify
+        run: echo "✅ Deploy completed!"

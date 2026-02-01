@@ -1,0 +1,64 @@
+---
+# Role: mysql
+
+- name: Install MySQL
+  apt:
+    name:
+      - mysql-server
+      - mysql-client
+      - python3-pymysql
+    state: present
+
+- name: Start MySQL
+  systemd:
+    name: mysql
+    state: started
+    enabled: yes
+
+- name: Set MySQL root password
+  mysql_user:
+    name: root
+    password: "{{ mysql_root_password }}"
+    login_user: root
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    state: present
+  ignore_errors: yes
+
+- name: Create .my.cnf for root
+  copy:
+    dest: /root/.my.cnf
+    content: |
+      [client]
+      user=root
+      password="{{ mysql_root_password }}"
+    owner: root
+    mode: '0600'
+
+- name: Create application database
+  mysql_db:
+    name: "{{ mysql_database }}"
+    state: present
+    config_file: /root/.my.cnf
+
+- name: Create application user
+  mysql_user:
+    name: "{{ mysql_user }}"
+    password: "{{ mysql_password }}"
+    priv: "{{ mysql_database }}.*:ALL"
+    host: localhost
+    state: present
+    config_file: /root/.my.cnf
+
+- name: Ensure MySQL listens only on localhost
+  lineinfile:
+    path: /etc/mysql/mysql.conf.d/mysqld.cnf
+    regexp: '^bind-address'
+    line: 'bind-address = 127.0.0.1'
+  notify: restart mysql
+
+- name: Remove test database
+  mysql_db:
+    name: test
+    state: absent
+    config_file: /root/.my.cnf
+  ignore_errors: yes

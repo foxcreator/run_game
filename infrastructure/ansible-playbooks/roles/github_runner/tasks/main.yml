@@ -1,0 +1,26 @@
+---
+# Role: github-runner — Підготовка користувача runner (Prerequisite for monolithprojects module)
+
+- name: Create runner user
+  user:
+    name: runner
+    shell: /bin/bash
+    groups: sudo
+    append: yes
+    create_home: yes
+
+- name: Allow runner user passwordless sudo for specific commands
+  copy:
+    dest: /etc/sudoers.d/runner
+    content: |
+      runner ALL=(ALL) NOPASSWD: /usr/sbin/service nginx reload, /usr/bin/systemctl reload nginx, /usr/bin/pm2
+    mode: '0440'
+    validate: 'visudo -cf %s'
+
+- name: Install dependencies (required by role)
+  apt:
+    name:
+      - git
+      - curl
+      - jq
+    state: present

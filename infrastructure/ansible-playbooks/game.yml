@@ -1,0 +1,39 @@
+---
+- name: Setup Game Server
+  hosts: all
+  become: true
+  
+  vars_files:
+    - inventory/production/vars/default.yml
+
+  pre_tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+  roles:
+    - { role: common, tags: ['common'] }
+    - { role: security, tags: ['security'] }
+    - { role: nginx, tags: ['nginx'] }
+    - { role: nodejs, tags: ['nodejs'] }
+    - { role: mysql, tags: ['mysql'] }
+    - { role: github_runner, tags: ['runner_setup'] }
+    - { role: deploy, tags: ['deploy'] }
+
+- name: Install GitHub Actions Runner
+  hosts: all
+  become: true
+  become_user: root
+  # TODO: Uncomment when needs to uninstall runner with new token
+  # vars:
+  #   - runner_state: "absent"
+  vars:
+    reinstall_runner: true
+  
+  vars_files:
+    - inventory/production/vars/runner-game.yaml
+
+  roles:
+    - role: monolithprojects.github_actions_runner
+      tags: ['github_runner']

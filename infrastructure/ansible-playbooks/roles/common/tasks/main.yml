@@ -1,0 +1,20 @@
+---
+# Role: common — базові пакети та deploy user
+
+- name: Install essential packages
+  apt:
+    name:
+      - git
+      - curl
+      - zip
+      - unzip
+      - htop
+      - vim
+      - acl
+    state: present
+
+- name: Add SSH key for root
+  authorized_key:
+    user: root
+    key: "{{ lookup('file', '../../hetzner_key.pub') }}"
+    state: present

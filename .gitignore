@@ -27,16 +27,31 @@ Thumbs.db
 logs/
 npm-debug.log*
 
+# Keys
+*.pem
+*.pub
+*_key
+*.key
+hetzner_key*
+infrastructure/terraform/hetzner/web/files/
+infrastructure/ansible-playbooks/hetzner_key*
+*.pem
+*.pub
+id_rsa*
+
 # Terraform
-infrastructure/terraform/.terraform/
-infrastructure/terraform/*.tfstate
-infrastructure/terraform/*.tfstate.*
-infrastructure/terraform/terraform.tfvars
-infrastructure/terraform/.terraform.lock.hcl
+infrastructure/terraform/**/.terraform/
+infrastructure/terraform/**/*.tfstate
+infrastructure/terraform/**/*.tfstate.*
+infrastructure/terraform/**/terraform.tfvars
+infrastructure/terraform/**/.terraform.lock.hcl
 
 # Ansible
 infrastructure/ansible/inventory/hosts.yml
+infrastructure/ansible-playbooks/inventory/production/group_vars/all.yml
 
 # Misc
 *.bak
 *.tmp
+
+./.idea

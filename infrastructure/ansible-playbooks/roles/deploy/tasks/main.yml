@@ -1,0 +1,63 @@
+---
+# Role: deploy — підготовка директорій для runner
+
+- name: Create site directories
+  file:
+    path: "{{ item.root }}"
+    state: directory
+    owner: runner
+    group: runner
+    mode: '0755'
+  loop: "{{ sites }}"
+
+- name: Create server directory
+  file:
+    path: "{{ item.root }}/server"
+    state: directory
+    owner: runner
+    group: runner
+    mode: '0755'
+  loop: "{{ sites }}"
+
+# При self-hosted runner, 'gti clone' робить сам runner через actions/checkout
+# Тому тут ми лише готуємо конфіги
+
+- name: Create .env file
+  copy:
+    dest: "{{ item.root }}/server/.env"
+    content: |
+      DATABASE_URL=mysql://{{ mysql_user }}:{{ mysql_password }}@localhost:3306/{{ mysql_database }}
+      ADMIN_PASSWORD={{ admin_password }}
+      NODE_ENV=production
+      CORS_ORIGIN=https://{{ item.domain }}
+    owner: runner
+    group: runner
+    mode: '0600'
+  loop: "{{ sites }}"
+  # .env створюється заздалегідь, або runner може створити його сам з secrets
+
+- name: Ensure PM2 ecosystem config exists (template)
+  copy:
+    dest: "{{ item.root }}/server/ecosystem.config.js"
+    content: |
+      module.exports = {
+        apps: [{
+          name: '{{ item.name }}-api',
+          script: 'src/index.js',
+          cwd: '{{ item.root }}/server',
+          instances: 1,
+          autorestart: true,
+          watch: false,
+          max_memory_restart: '500M',
+          env: {
+            NODE_ENV: 'production',
+            PORT: {{ item.api_port }}
+          }
+        }]
+      };
+    owner: runner
+    group: runner
+  loop: "{{ sites }}"
+
+# PM2 і Prisma команди буде запускати сам Runner під час CI/CD пайплайну
+
