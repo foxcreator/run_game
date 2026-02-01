@@ -119,6 +119,12 @@ class GameScene extends Phaser.Scene {
             // КРОК 6: Вороги та перешкоди
             this.chasers = [];
             this.obstacles = [];
+            // Initialize Car Pool
+            this.carPool = this.add.group({
+                classType: Car,
+                maxSize: 60,
+                runChildUpdate: false // We update manually in update loop via obstacles array
+            });
             this.pickups = [];
             this.exchanges = [];
 
@@ -1049,9 +1055,23 @@ class GameScene extends Phaser.Scene {
         const textureKey = availableTextures[this.carTextureIndex % availableTextures.length];
         this.carTextureIndex++;
         try {
-            const car = new Car(this, spawnX, spawnY, textureKey);
+            // Use Object Pool
+            const car = this.carPool.get(spawnX, spawnY, textureKey);
             if (car) {
-                this.obstacles.push(car);
+                // If it's a reused car, we need to reset it. 
+                // If it's new, the constructor ran, but we can call reset to be safe and uniform.
+                // However, constructor might have different arguments than get(). 
+                // Group.get() passes (x, y, key, frame, visible) to create/constructor if not found.
+                // Our Car constructor is (scene, x, y, textureKey).
+                // Wait, Group.get(x, y) might not pass textureKey to constructor correctly if strict.
+                // But we can just call reset() immediately after.
+
+                car.reset(spawnX, spawnY, textureKey);
+
+                // Ensure it's in the obstacles array for collision/update logic
+                if (!this.obstacles.includes(car)) {
+                    this.obstacles.push(car);
+                }
                 return true;
             }
         } catch (error) {
@@ -1186,15 +1206,7 @@ class GameScene extends Phaser.Scene {
     logDiagnostics(time) {
         if (this.debugLogTimer === undefined) this.debugLogTimer = 0;
         if (time > this.debugLogTimer) {
-            console.log('%c--- Diagnostic Log ---', 'color: #00ff00; font-weight: bold;');
-            console.log({
-                FPS: Math.round(this.game.loop.actualFps),
-                Enemies: this.chasers ? this.chasers.length : 0,
-                Pickups: this.pickups ? this.pickups.length : 0,
-                Obstacles: this.obstacles ? this.obstacles.length : 0,
-                EventListeners: this.events.eventNames().length,
-                ListenerEvents: this.events.eventNames()
-            });
+
             this.debugLogTimer = time + 5000; // Log every 5 seconds
         }
     }
@@ -1401,7 +1413,7 @@ class GameScene extends Phaser.Scene {
             this.pickupSpawnTimer = 0;
             this.maintainPickups();
         }
-        this.cleanupPickups();
+        this.cleanupPickups(time);
         if (this.pickups.length > 0 && this.player) {
             const pickupRadius = 40;
             for (let i = this.pickups.length - 1; i >= 0; i--) {
@@ -1427,7 +1439,7 @@ class GameScene extends Phaser.Scene {
                 }
             }
         }
-        this.pathRecalculationQueue = [];
+        this.pathRecalculationQueue.length = 0;
         for (const chaser of this.chasers) {
             if (chaser && chaser.active && typeof chaser.shouldRecalculatePath === 'function') {
                 if (chaser.shouldRecalculatePath(time)) {
@@ -1487,26 +1499,61 @@ class GameScene extends Phaser.Scene {
         }
         if (this.carSpawnTimer !== undefined) {
             this.carSpawnTimer += delta;
-            const activeCars = this.obstacles.filter(obs => {
-                if (!(obs instanceof Car)) return false;
-                if (!obs.active) return false;
-                if (!obs.body || !obs.scene) return false;
-                return true;
-            });
+
+            let activeCarCount = 0;
+            // Optimization: Iterate manually to avoid creating a new array every frame
+            for (let i = 0; i < this.obstacles.length; i++) {
+                const obs = this.obstacles[i];
+                if (obs instanceof Car && obs.active && obs.body && obs.scene) {
+                    activeCarCount++;
+                }
+            }
+
             const minCars = GAME_CONFIG.OBSTACLES.MOVING_BUS.MIN_COUNT;
             const maxCars = GAME_CONFIG.OBSTACLES.MOVING_BUS.MAX_COUNT;
-            if (activeCars.length < minCars && this.carSpawnTimer >= 100) {
+            if (activeCarCount < minCars && this.carSpawnTimer >= 100) {
                 this.spawnSingleCar();
                 this.carSpawnTimer = 0;
             }
-            else if (activeCars.length < maxCars && this.carSpawnTimer >= this.carSpawnInterval) {
+            else if (activeCarCount < maxCars && this.carSpawnTimer >= this.carSpawnInterval) {
                 this.carSpawnTimer = 0;
                 this.spawnSingleCar();
             }
         }
         this.checkCarCollisions();
+        this.cleanupEntities();
+        this.updateRiverSound(time);
         this.logDiagnostics(time);
     }
+    cleanupEntities() {
+        // Cleanup Obstacles (Cars) - Swap and Pop for O(1) removal
+        if (this.obstacles) {
+            for (let i = this.obstacles.length - 1; i >= 0; i--) {
+                const obstacle = this.obstacles[i];
+                // Check if object is destroyed or invalid
+                if (!obstacle || !obstacle.active || !obstacle.scene) {
+
+                    // Specific cleanup for Car (Pooling)
+                    if (obstacle instanceof Car) {
+                        obstacle.deactivate();
+                        this.carPool.killAndHide(obstacle);
+                    } else {
+                        // Regular destroy for non-pooled objects
+                        if (obstacle && typeof obstacle.destroy === 'function') {
+                            obstacle.destroy();
+                        }
+                    }
+
+                    const lastIndex = this.obstacles.length - 1;
+                    if (i !== lastIndex) {
+                        this.obstacles[i] = this.obstacles[lastIndex];
+                    }
+                    this.obstacles.pop();
+                }
+            }
+        }
+    }
+
     checkChaserTilemapCollisions(chaser) {
         if (!this.tilemap || !chaser) return;
         const chaserX = chaser.x;
@@ -2083,17 +2130,31 @@ class GameScene extends Phaser.Scene {
             this.ambienceRiver.stop();
         }
     }
-    updateRiverSound() {
+    updateRiverSound(time) {
         if (!this.ambienceRiver || !this.player || !this.tilemap) return;
+
+        // OPTIMIZATION: Throttling - run only every 500ms
+        if (time && time - (this.lastRiverSoundUpdate || 0) < 500) {
+            return;
+        }
+        this.lastRiverSoundUpdate = time;
+
         const ambienceConfig = GAME_CONFIG.AUDIO.AMBIENCE;
         const collisionMapX = Math.floor(this.player.x);
         const collisionMapY = Math.floor(this.player.y);
         const searchRadius = ambienceConfig.RIVER_MAX_DISTANCE;
         let closestWaterDistance = Infinity;
-        for (let dx = -searchRadius; dx <= searchRadius; dx += 16) {
-            for (let dy = -searchRadius; dy <= searchRadius; dy += 16) {
+
+        // Optimization: Increase step size to 32 (every 2nd tile) instead of 16 for performance
+        // Water bodies are usually large, so checking every tile is unnecessary
+        const stepSize = 32;
+
+        for (let dx = -searchRadius; dx <= searchRadius; dx += stepSize) {
+            for (let dy = -searchRadius; dy <= searchRadius; dy += stepSize) {
                 const checkX = collisionMapX + dx;
                 const checkY = collisionMapY + dy;
+
+                // Use the potentially optimized isWater check
                 if (this.tilemap.isWater && this.tilemap.isWater(checkX, checkY)) {
                     const distance = Math.sqrt(dx * dx + dy * dy);
                     if (distance < closestWaterDistance) {
@@ -2112,8 +2173,16 @@ class GameScene extends Phaser.Scene {
         }
         this.ambienceRiver.setVolume(volume);
     }
-    cleanupPickups() {
+    cleanupPickups(time) {
         if (!this.player) return;
+
+        // OPTIMIZATION: Throttling - run only every 1000ms (1 second)
+        // Cleanup is not time-critical
+        if (time && time - (this.lastPickupCleanup || 0) < 1000) {
+            return;
+        }
+        this.lastPickupCleanup = time;
+
         const cleanupDistance = 800;
         const playerX = this.player.x;
         const playerY = this.player.y;
@@ -2134,15 +2203,19 @@ class GameScene extends Phaser.Scene {
             }
             const dx = pickup.x - playerX;
             const dy = pickup.y - playerY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance > cleanupDistance) {
-                const dotProduct = dx * dirX + dy * dirY;
-                if (dotProduct < 0) {
-                    if (pickup.body) {
-                        pickup.body.destroy();
+
+            // Optimization: Simple Box Check first to avoid Math.sqrt
+            if (Math.abs(dx) > cleanupDistance || Math.abs(dy) > cleanupDistance) {
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > cleanupDistance) {
+                    const dotProduct = dx * dirX + dy * dirY;
+                    if (dotProduct < 0) {
+                        if (pickup.body) {
+                            pickup.body.destroy();
+                        }
+                        pickup.destroy();
+                        this.pickups.splice(i, 1);
                     }
-                    pickup.destroy();
-                    this.pickups.splice(i, 1);
                 }
             }
         }

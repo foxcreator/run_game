@@ -1,10 +1,12 @@
 import { GAME_CONFIG } from '../config/gameConfig.js';
 import spriteManager from '../utils/SpriteManager.js';
+
 const CHASER_STATES = {
     IDLE: 'IDLE',
     CHASE: 'CHASE',
     ATTACK: 'ATTACK'
 };
+
 class Chaser extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y, type) {
         super(scene, x, y, null);
@@ -33,10 +35,15 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         this.state = CHASER_STATES.IDLE;
         this.currentPath = null;
         this.pathIndex = 0;
+        // Optimization: currentWaypoint as object is fine if persisted, but we might want to avoid constantly nulling it if not needed.
         this.currentWaypoint = null;
         this.lastPathRecalculation = 0;
         this.pathRecalculationInterval = 400;
-        this.lastPlayerTile = null;
+
+        // Optimization: Reusable objects to avoid GC
+        this.lastPlayerTile = { x: 0, y: 0 };
+        this.tempTile = { x: 0, y: 0 };
+
         this.lastPosition = { x: this.x, y: this.y };
         this.stuckTimer = 0;
         this.stuckThreshold = 500;
@@ -238,10 +245,7 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
      */
     hospitalize() {
         if (this.isHospitalized) return;
-
         this.isHospitalized = true;
-
-
         // Викликаємо подію для GameScene
         this.scene.events.emit('enemy-hospitalized', this);
 
@@ -278,7 +282,7 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
             yoyo: true,
             onComplete: () => {
                 this.angle = 0;
-                this.scale = 1; // Reset or keep? Resetting for now.
+                this.scale = 1;
                 if (this.type === 'Blocker') this.setDisplaySize(GAME_CONFIG.CHASERS.BLOCKER.DISPLAY_SIZE, GAME_CONFIG.CHASERS.BLOCKER.DISPLAY_SIZE);
                 else if (this.type === 'Sticker') this.setDisplaySize(GAME_CONFIG.CHASERS.STICKER.DISPLAY_SIZE, GAME_CONFIG.CHASERS.STICKER.DISPLAY_SIZE);
             }
@@ -303,8 +307,6 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
 
     update(delta, time = 0) {
         if (!this.active) return;
-
-        // Hospital mechanic
         if (this.carHitCooldown > 0) {
             this.carHitCooldown -= delta;
             if (this.carHitCooldown < 0) this.carHitCooldown = 0;
@@ -328,7 +330,6 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
                 this.isLured = false;
                 this.lureTarget = null;
             } else {
-                // Move towards lure
                 if (this.lureTarget) {
                     const dx = this.lureTarget.x - this.x;
                     const dy = this.lureTarget.y - this.y;
@@ -337,22 +338,16 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
                         const speed = this.speed * this.getSpeedMultiplier();
                         this.scene.physics.moveTo(this, this.lureTarget.x, this.lureTarget.y, speed);
                     } else {
-                        // Eating
                         if (this.body) this.body.setVelocity(0, 0);
                     }
                     this.updateVisuals();
-                    return; // Skip normal movement
+                    return;
                 }
             }
         }
 
-        // Immunity check logic
-        // We need to know if player is immune. Chaser doesn't know about BonusManager directly.
-        // But we can check a flag on player if we want, or GameScene can skip update? 
-        // Better: Chaser checks target. But if "Deputy" is active, player is ignored.
-        // We can check `this.scene.bonusManager.isImmune()` if available.
+        // Immunity check
         if (this.scene.bonusManager && this.scene.bonusManager.isImmune()) {
-            // Idle behavior
             if (this.body) this.body.setVelocity(0, 0);
             this.updateVisuals();
             return;
@@ -437,7 +432,6 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         return minMultiplier;
     }
     applySlowdown(multiplier, duration) {
-        // Check if we already have a slowdown of this strength
         const existing = this.speedDebuffs.find(d => Math.abs(d.multiplier - multiplier) < 0.01);
         if (existing) {
             if (existing.duration < duration) {
@@ -463,32 +457,45 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         }
         const stepSize = 16;
         const steps = Math.ceil(distance / stepSize);
-        const numChecks = Math.max(5, Math.min(steps, 20));
+        // Optimization: Cap steps more aggressively
+        const numChecks = Math.max(5, Math.min(steps, 15));
+
         for (let i = 1; i <= numChecks; i++) {
             const t = i / numChecks;
             const checkX = this.x + dx * t;
             const checkY = this.y + dy * t;
-            const tile = this.navigationSystem.worldToTile(checkX, checkY);
-            const checkTiles = [
-                { x: tile.x, y: tile.y },
-                { x: tile.x + 1, y: tile.y },
-                { x: tile.x - 1, y: tile.y },
-                { x: tile.x, y: tile.y + 1 },
-                { x: tile.x, y: tile.y - 1 }
-            ];
-            let hasObstacle = false;
-            for (const checkTile of checkTiles) {
-                if (!this.navigationSystem.isWalkable(checkTile.x, checkTile.y)) {
-                    hasObstacle = true;
-                    break;
-                }
+
+            // Optimization: Use non-allocating method
+            this.navigationSystem.worldToTileXY(checkX, checkY, this.tempTile);
+
+            // Manually check neighboring tiles without creating array
+            // Optimization: check center first, if blocked return false immediately
+            if (!this.navigationSystem.isWalkable(this.tempTile.x, this.tempTile.y)) return false;
+
+            // Check neighbors if agent is "fat" or path is tight. 
+            // For performance, we might skip full neighbor check if center is fine, 
+            // but let's keep it safe for now:
+            if (!this.navigationSystem.isWalkable(this.tempTile.x + 1, this.tempTile.y) &&
+                !this.navigationSystem.isWalkable(this.tempTile.x - 1, this.tempTile.y) &&
+                !this.navigationSystem.isWalkable(this.tempTile.x, this.tempTile.y + 1) &&
+                !this.navigationSystem.isWalkable(this.tempTile.x, this.tempTile.y - 1)) {
+                // Relaxed check: Only block if surrounded? No, original checked ALL neighbors.
+                // Original logic: "if ANY of checkTiles is not walkable -> hasObstacle = true"
+                // So we must verify ALL 5 tiles (center + 4 neighbors) are walkable.
+
+                // However, creating a path through a 1-tile wide gap might fail with this.
+                // Let's optimize: Check center. If valid, check neighbors.
             }
-            if (hasObstacle) {
-                return false;
-            }
+
+            // Re-implementing strict check efficiently:
+            if (!this.navigationSystem.isWalkable(this.tempTile.x + 1, this.tempTile.y)) return false;
+            if (!this.navigationSystem.isWalkable(this.tempTile.x - 1, this.tempTile.y)) return false;
+            if (!this.navigationSystem.isWalkable(this.tempTile.x, this.tempTile.y + 1)) return false;
+            if (!this.navigationSystem.isWalkable(this.tempTile.x, this.tempTile.y - 1)) return false;
         }
         return true;
     }
+
     updateAntiStuck(delta) {
         if (!this.body) return;
         const distanceMoved = Phaser.Math.Distance.Between(
@@ -525,14 +532,13 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
         if (!this.target || !this.navigationSystem) {
             return false;
         }
-        const currentPlayerTile = this.navigationSystem.worldToTile(
-            this.target.x,
-            this.target.y
-        );
-        if (!this.lastPlayerTile ||
-            currentPlayerTile.x !== this.lastPlayerTile.x ||
-            currentPlayerTile.y !== this.lastPlayerTile.y) {
-            this.lastPlayerTile = currentPlayerTile;
+        // Optimized: Non-allocating
+        this.navigationSystem.worldToTileXY(this.target.x, this.target.y, this.tempTile);
+
+        if (this.tempTile.x !== this.lastPlayerTile.x ||
+            this.tempTile.y !== this.lastPlayerTile.y) {
+            this.lastPlayerTile.x = this.tempTile.x;
+            this.lastPlayerTile.y = this.tempTile.y;
             return true;
         }
         if (time - this.lastPathRecalculation >= this.pathRecalculationInterval) {
@@ -548,12 +554,18 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
             this.currentPath = null;
             return;
         }
-        const fromTile = this.navigationSystem.worldToTile(this.x, this.y);
-        const toTile = this.navigationSystem.worldToTile(this.target.x, this.target.y);
-        const path = this.navigationSystem.findPath(
-            fromTile.x, fromTile.y,
-            toTile.x, toTile.y
-        );
+
+        // Use temp objects for coordinates
+        this.navigationSystem.worldToTileXY(this.x, this.y, this.tempTile);
+        const fromX = this.tempTile.x;
+        const fromY = this.tempTile.y;
+
+        this.navigationSystem.worldToTileXY(this.target.x, this.target.y, this.tempTile);
+        const toX = this.tempTile.x;
+        const toY = this.tempTile.y;
+
+        const path = this.navigationSystem.findPath(fromX, fromY, toX, toY);
+
         if (path && path.length > 0) {
             this.currentPath = path;
             this.pathIndex = 0;
@@ -570,16 +582,27 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
             this.currentWaypoint = null;
             return;
         }
+        // Safety brake
+        if (this.pathIndex >= this.currentPath.length) {
+            this.currentWaypoint = null;
+            return;
+        }
+
+        // Loop through reached waypoints
         while (this.pathIndex < this.currentPath.length) {
             const waypointTile = this.currentPath[this.pathIndex];
+
+            // We create a new object here for now, because this only happens occasionally (not every frame)
             const waypointWorld = this.navigationSystem.tileToWorld(
                 waypointTile.x,
                 waypointTile.y
             );
+
             const distanceToWaypoint = Phaser.Math.Distance.Between(
                 this.x, this.y,
                 waypointWorld.x, waypointWorld.y
             );
+
             if (distanceToWaypoint < this.navigationSystem.tileSize / 2) {
                 this.pathIndex++;
             } else {
@@ -587,6 +610,7 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
                 break;
             }
         }
+
         if (this.pathIndex >= this.currentPath.length) {
             this.currentWaypoint = null;
         }
@@ -731,14 +755,23 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
                 }
             }
         }
-        this.updateSounds();
+        this.updateSounds(time);
         this.updateVisuals();
     }
-    updateSounds() {
+    updateSounds(time) {
         if (!this.audioManager || !this.target) return;
+
+        // OPTIMIZATION: Throttling - run only every 250ms
+        // Distance calculation for 10+ enemies is heavy
+        if (time && time - (this.lastSoundUpdate || 0) < 250) {
+            return;
+        }
+        this.lastSoundUpdate = time;
+
         const currentSpeed = this.body ? Math.sqrt(this.body.velocity.x ** 2 + this.body.velocity.y ** 2) : 0;
         const shouldPlayRunning = currentSpeed > 10 && !this.isFrozen;
         const isRunningPlaying = this.audioManager.isSoundPlaying(this.soundId);
+
         if (shouldPlayRunning && !isRunningPlaying) {
             const sound = this.audioManager.playSound(this.soundId, true, null, 'running');
             if (sound) {
@@ -752,17 +785,26 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
             if (runningSound && this.target) {
                 const dx = this.target.x - this.x;
                 const dy = this.target.y - this.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                // Optimized distance check (square distance first)
+                const distSq = dx * dx + dy * dy;
                 const config = GAME_CONFIG.AUDIO.ENEMY_SOUNDS;
                 const maxDist = config.MAX_DISTANCE;
+                const maxDistSq = maxDist * maxDist;
+
+                if (distSq > maxDistSq) {
+                    runningSound.setVolume(config.MIN_VOLUME * this.audioManager.getSoundsVolume());
+                    return;
+                }
+
+                const distance = Math.sqrt(distSq);
                 const minDist = config.MIN_DISTANCE;
                 const maxVol = config.MAX_VOLUME;
                 const minVol = config.MIN_VOLUME;
+
                 let volume;
                 if (distance <= minDist) {
                     volume = maxVol;
-                } else if (distance >= maxDist) {
-                    volume = minVol;
                 } else {
                     const ratio = (distance - minDist) / (maxDist - minDist);
                     volume = maxVol - (maxVol - minVol) * ratio;
@@ -774,6 +816,7 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
     }
     updateVisuals() {
         if (this.type !== 'Blocker' && this.type !== 'Sticker') return;
+
         const prefix = this.type.toLowerCase();
         if (this.body) {
             const velocity = Math.sqrt(
@@ -791,6 +834,7 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
                 }
             }
         }
+
         if (this.isMovingChaser && !this.isFrozen) {
             const animKey = `${prefix}_run_${this.lastDirection}`;
             if (!this.anims.isPlaying || this.anims.currentAnim.key !== animKey) {
@@ -803,6 +847,7 @@ class Chaser extends Phaser.Physics.Arcade.Sprite {
                 this.anims.stop();
             }
         }
+
         let tint = 0xffffff;
         if (this.isFrozen) {
             tint = 0x9b59b6;

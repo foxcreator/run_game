@@ -157,18 +157,18 @@ class ApiClient {
         });
 
         this.socket.on('connect', () => {
-            console.log('WebSocket connected');
+
         });
 
         this.socket.on('leaderboard:update', (data) => {
-            console.log('Leaderboard updated');
+
             if (this.onLeaderboardUpdate) {
                 this.onLeaderboardUpdate(data);
             }
         });
 
         this.socket.on('leaderboard:initial', (data) => {
-            console.log('Initial leaderboard received');
+
             if (this.onLeaderboardUpdate) {
                 this.onLeaderboardUpdate(data);
             }
@@ -181,7 +181,7 @@ class ApiClient {
         });
 
         this.socket.on('disconnect', () => {
-            console.log('WebSocket disconnected');
+
         });
     }
 

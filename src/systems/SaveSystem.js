@@ -132,7 +132,7 @@ class SaveSystem {
                 bonuses: localData.bonuses || {}
             });
             this.lastSyncTime = Date.now();
-            console.log('Data synced to server');
+
         } catch (error) {
             console.error('Failed to sync to server:', error);
         }
@@ -159,7 +159,7 @@ class SaveSystem {
                 }
 
                 this.save(localData);
-                console.log('Data synced from server');
+
                 return true;
             }
         } catch (error) {
@@ -181,7 +181,7 @@ class SaveSystem {
                 moneyEarned
             });
             this.lastSyncTime = Date.now();
-            console.log('Game result reported to server');
+
         } catch (error) {
             console.error('Failed to report game end:', error);
         }

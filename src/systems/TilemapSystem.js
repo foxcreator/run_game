@@ -906,14 +906,28 @@ class TilemapSystem {
         this.lastVisibilityUpdate = time || 0;
         const viewport = this.camera.worldView;
         const margin = 200;
+
+        // Optimization: Pre-calculate bounds
+        const viewMinX = viewport.x - margin;
+        const viewMaxX = viewport.x + viewport.width + margin;
+        const viewMinY = viewport.y - margin;
+        const viewMaxY = viewport.y + viewport.height + margin;
+
+        const halfTile = this.tileSize / 2;
+
         for (const sprite of this.tileSprites) {
             if (!sprite || !sprite.active) continue;
-            const spriteBounds = sprite.getBounds();
+
+            // Optimization: Avoid getBounds() which allocates new Rectangle objects
+            // Use coordinate math directly
+            const x = sprite.x;
+            const y = sprite.y;
+
             const isVisible = (
-                spriteBounds.right >= viewport.x - margin &&
-                spriteBounds.left <= viewport.x + viewport.width + margin &&
-                spriteBounds.bottom >= viewport.y - margin &&
-                spriteBounds.top <= viewport.y + viewport.height + margin
+                x + halfTile >= viewMinX &&
+                x - halfTile <= viewMaxX &&
+                y + halfTile >= viewMinY &&
+                y - halfTile <= viewMaxY
             );
             sprite.setVisible(isVisible);
         }

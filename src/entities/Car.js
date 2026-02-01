@@ -97,46 +97,118 @@ class Car extends Phaser.GameObjects.Image {
     }
     updateSounds() {
         if (!this.engineSound || !this.scene.player) return;
-        if (this.scene.isPaused) {
-            this.engineSound.setVolume(0);
+
+        // Mute if paused/game over
+        if (this.scene.isPaused || !this.scene.player.active) {
+            if (this.engineSound.volume > 0) {
+                this.engineSound.setVolume(0);
+            }
             return;
         }
-        const audioConfig = GAME_CONFIG.AUDIO.CAR_ENGINE;
-        const player = this.scene.player;
-        const distance = Phaser.Math.Distance.Between(
-            this.x, this.y,
-            player.x, player.y
-        );
-        let volume = 0;
-        if (distance < audioConfig.MIN_DISTANCE) {
-            volume = audioConfig.MAX_VOLUME;
-        } else if (distance < audioConfig.MAX_DISTANCE) {
-            const ratio = (audioConfig.MAX_DISTANCE - distance) / (audioConfig.MAX_DISTANCE - audioConfig.MIN_DISTANCE);
-            volume = audioConfig.MIN_VOLUME + (audioConfig.MAX_VOLUME - audioConfig.MIN_VOLUME) * ratio;
-        } else {
-            volume = audioConfig.MIN_VOLUME;
+
+        const playerX = this.scene.player.x;
+        const playerY = this.scene.player.y;
+        const distSq = (this.x - playerX) ** 2 + (this.y - playerY) ** 2;
+
+        const config = GAME_CONFIG.AUDIO.CAR_ENGINE;
+        const maxDistSq = config.MAX_DISTANCE * config.MAX_DISTANCE;
+
+        if (distSq > maxDistSq) {
+            if (this.engineSound.volume > 0) {
+                this.engineSound.setVolume(0);
+            }
+            return;
         }
-        if (this.audioManager) {
-            volume *= this.audioManager.soundsVolume;
-            if (!this.audioManager.soundsEnabled) {
-                volume = 0;
+
+        const distance = Math.sqrt(distSq);
+        const minDist = config.MIN_DISTANCE;
+        const maxVol = config.MAX_VOLUME;
+        const minVol = config.MIN_VOLUME;
+
+        let targetVolume = 0;
+        if (distance <= minDist) {
+            targetVolume = maxVol;
+        } else {
+            const ratio = (distance - minDist) / (config.MAX_DISTANCE - minDist);
+            targetVolume = maxVol - (maxVol - minVol) * ratio;
+        }
+
+        const globalVolume = this.audioManager.getSoundsVolume();
+        // Adjust volume based on speed
+        let playbackRate = config.IDLE_PLAYBACK_RATE;
+        if (this.body && this.body.speed > config.SPEED_THRESHOLD) {
+            const speedRatio = Math.min(this.body.speed / this.speed, 1);
+            playbackRate = config.MOVING_PLAYBACK_RATE_MIN +
+                (config.MOVING_PLAYBACK_RATE_MAX - config.MOVING_PLAYBACK_RATE_MIN) * speedRatio;
+        }
+
+        this.engineSound.setRate(playbackRate);
+        this.engineSound.setVolume(targetVolume * globalVolume);
+    }
+
+    reset(x, y, textureKey = null) {
+        this.setActive(true);
+        this.setVisible(true);
+        this.setPosition(x, y);
+        this.body.reset(x, y);
+        this.body.setImmovable(false);
+        this.setDepth(0); // Reset depth just in case
+
+        // Texture logic
+        if (!textureKey) {
+            const carTextures = GAME_CONFIG.OBSTACLES.MOVING_BUS.CAR_TEXTURES || [];
+            const availableTextures = carTextures.filter(key => this.scene.textures.exists(key));
+            if (availableTextures.length > 0) {
+                textureKey = availableTextures[Math.floor(Math.random() * availableTextures.length)];
             }
         }
-        this.engineSound.setVolume(volume);
-        const currentSpeed = this.body ? Math.sqrt(
-            this.body.velocity.x * this.body.velocity.x +
-            this.body.velocity.y * this.body.velocity.y
-        ) : 0;
-        let playbackRate;
-        if (currentSpeed < audioConfig.SPEED_THRESHOLD || this.isAccident) {
-            playbackRate = audioConfig.IDLE_PLAYBACK_RATE;
+
+        if (textureKey && this.scene.textures.exists(textureKey)) {
+            this.setTexture(textureKey);
         } else {
-            const speedRatio = Math.min(currentSpeed / this.speed, 1.0);
-            playbackRate = audioConfig.MOVING_PLAYBACK_RATE_MIN +
-                (audioConfig.MOVING_PLAYBACK_RATE_MAX - audioConfig.MOVING_PLAYBACK_RATE_MIN) * speedRatio;
+            // Fallback logic handled in constructor usually, but for reset we assume basic texture exists or we stick to current
         }
-        this.engineSound.setRate(playbackRate);
+        this.textureKey = textureKey;
+
+        // Reset properties
+        this.collisionCooldown = 0;
+        this.currentDirection = null;
+        this.lastPosition = { x: x, y: y };
+        this.stuckTimer = 0;
+        this.directionChangeCooldown = 0;
+        this.isAccident = false;
+        this.accidentTimer = 0;
+        this.accidentCooldown = 0;
+        this.accidentDuration = 0;
+
+        // Rotation
+        this.determineInitialDirection();
+        if (!this.currentDirection) {
+            const directions = ['up', 'down', 'left', 'right'];
+            this.currentDirection = directions[Math.floor(Math.random() * directions.length)];
+        }
+        this.updateRotation();
+
+        // Audio
+        if (this.engineSound) {
+            this.engineSound.stop();
+            this.engineSound.destroy();
+            this.engineSound = null;
+        }
+        this.initEngineSound();
     }
+
+    deactivate() {
+        this.setActive(false);
+        this.setVisible(false);
+        if (this.body) {
+            this.body.stop();
+        }
+        if (this.engineSound) {
+            this.engineSound.stop();
+        }
+    }
+
     isOnRoad(x, y) {
         if (!this.scene || !this.scene.tilemap) return false;
         return this.scene.tilemap.isRoad(x, y);
