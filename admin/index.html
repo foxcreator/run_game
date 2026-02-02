@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="uk">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Busification Run - Адмін-панель</title>
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
     <div id="login-screen" class="screen active">
         <div class="login-box">
@@ -20,7 +22,10 @@
     <div id="dashboard-screen" class="screen">
         <header>
             <h1>🎮 Busification Run - Адмін</h1>
-            <button id="logout-btn">Вийти</button>
+            <div class="header-actions">
+                <button id="force-update-btn" class="danger-btn">🔄 Force Update</button>
+                <button id="logout-btn">Вийти</button>
+            </div>
         </header>
 
         <main>
@@ -82,4 +87,5 @@
 
     <script src="app.js"></script>
 </body>
+
 </html>

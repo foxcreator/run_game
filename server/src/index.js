@@ -7,6 +7,7 @@ import { config } from './config.js';
 import authRoutes from './routes/auth.js';
 import playerRoutes from './routes/player.js';
 import leaderboardRoutes from './routes/leaderboard.js';
+import adminRoutes from './routes/admin.js';
 import { setupWebSocket } from './websocket/leaderboard.js';
 
 const app = express();
@@ -35,6 +36,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/player', playerRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

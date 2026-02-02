@@ -110,6 +110,19 @@ header button {
     cursor: pointer;
 }
 
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.danger-btn {
+    background: linear-gradient(135deg, #ff416c, #ff4b2b);
+}
+
+.danger-btn:hover {
+    filter: brightness(1.1);
+}
+
 main {
     padding: 40px;
     max-width: 1400px;
@@ -160,7 +173,8 @@ table {
     margin-bottom: 40px;
 }
 
-th, td {
+th,
+td {
     padding: 16px;
     text-align: left;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);

@@ -180,6 +180,12 @@ class ApiClient {
             }
         });
 
+        this.socket.on('system:force_reload', (data) => {
+            console.log('Received force reload signal:', data);
+            // Reload page to get new code
+            window.location.reload();
+        });
+
         this.socket.on('disconnect', () => {
 
         });

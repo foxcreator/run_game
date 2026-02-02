@@ -174,7 +174,26 @@ function logout() {
 }
 
 // Event listeners
+const forceUpdateBtn = document.getElementById('force-update-btn');
+
 loginBtn.addEventListener('click', login);
+logoutBtn.addEventListener('click', logout);
+
+if (forceUpdateBtn) {
+    forceUpdateBtn.addEventListener('click', async () => {
+        if (!confirm('Ви впевнені? Це перезавантажить гру у ВСІХ гравців зараз!')) return;
+
+        try {
+            const result = await apiRequest('/admin/force-reload', {
+                method: 'POST'
+            });
+            alert('Успішно: ' + result.message);
+        } catch (error) {
+            alert('Помилка: ' + error.message);
+        }
+    });
+}
+
 logoutBtn.addEventListener('click', logout);
 passwordInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') login();
