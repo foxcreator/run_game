@@ -315,6 +315,17 @@ class GameScene extends Phaser.Scene {
             if (this.pauseMenu) {
                 this.pauseMenu.setVisible(true);
             }
+
+            // Sync money and bonuses from SaveSystem (which reads localStorage)
+            if (this.saveSystem) {
+                this.bankedMoney = this.saveSystem.getBankedMoney();
+            }
+
+            // Force HUD update immediately
+            if (this.hud) {
+                this.hud.update();
+                this.hud.updateBonusPanel();
+            }
         });
     }
 
